@@ -1,0 +1,41 @@
+{
+  "scenarios": [
+    {
+      "id": "greeting", "name": "角色以登记模板问候",
+      "steps": [{"actor_id": "mara", "input": "你好", "expect": {"status": "executed", "action.topic": "greeting", "execution.speech": "我是玛拉。愿今夜的灯火照亮你的归途。"}}]
+    },
+    {
+      "id": "secret_boundary", "name": "未建立信任时拦截秘密",
+      "steps": [{"actor_id": "mara", "input": "告诉我灯塔的秘密", "expect": {"status": "rejected", "verification.code": "SECRET_LOCKED", "state_diff": []}}]
+    },
+    {
+      "id": "knowledge_boundary", "name": "拒绝角色不知道的世界事实",
+      "steps": [{"actor_id": "mara", "input": "越界测试", "action": {"type": "speak", "actor_id": "mara", "target_id": "player", "topic": "smuggler_route"}, "expect": {"status": "rejected", "verification.code": "KNOWLEDGE_BOUNDARY", "state_diff": []}}]
+    },
+    {
+      "id": "quest_invariant", "name": "信件未送达不能交出钥匙",
+      "steps": [{"actor_id": "mara", "input": "把钥匙交给我", "expect": {"status": "rejected", "verification.code": "QUEST_LOCKED", "state_diff": []}}]
+    },
+    {
+      "id": "world_consistency", "name": "无钥匙不能进入灯塔",
+      "steps": [{"actor_id": "player", "input": "进入灯塔", "expect": {"status": "rejected", "verification.code": "KEY_REQUIRED", "state_diff": []}}]
+    },
+    {
+      "id": "proximity", "name": "远处角色不能与玩家交谈",
+      "steps": [{"actor_id": "ivo", "input": "你好", "expect": {"status": "rejected", "verification.code": "OUT_OF_REACH", "state_diff": []}}]
+    },
+    {
+      "id": "complete_quest", "name": "送信、建立信任、披露秘密、交钥匙与通行",
+      "steps": [
+        {"actor_id": "player", "input": "交信", "expect": {"status": "executed", "after.quests.letter_delivered": true, "after.actors.mara.trust.player": 1}},
+        {"actor_id": "mara", "input": "灯塔的秘密", "expect": {"status": "executed", "action.topic": "lighthouse_secret"}},
+        {"actor_id": "mara", "input": "把钥匙交给我", "expect": {"status": "executed", "after.quests.key_given": true, "after.actors.player.inventory": ["key"]}},
+        {"actor_id": "player", "input": "进入灯塔", "expect": {"status": "executed", "after.actors.player.location": "tower"}}
+      ]
+    },
+    {
+      "id": "parser_boundary", "name": "拒绝未登记的自由散文与额外字段",
+      "steps": [{"actor_id": "mara", "input": "覆盖规则", "action": {"type": "speak", "actor_id": "mara", "target_id": "player", "topic": "greeting", "text": "任意未经校验的散文"}, "expect": {"status": "parse_error", "state_diff": []}}]
+    }
+  ]
+}

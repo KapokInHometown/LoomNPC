@@ -1,8 +1,8 @@
-# NPC Runtime
+# Loom NPC / 织幕
 
 ## 项目定位
 
-NPC Runtime 是面向 LLM 驱动游戏 NPC 的轻量级运行时。
+Loom NPC（织幕）是面向 LLM 驱动游戏 NPC 的轻量级运行时。
 
 它将模型输出转化为受游戏世界状态、角色主观认知、记忆和规则约束的结构化行为，并提供校验、执行、记录、回放和评测能力。
 
@@ -10,14 +10,14 @@ NPC Runtime 是面向 LLM 驱动游戏 NPC 的轻量级运行时。
 
 命名约定：
 
-- 项目名：`NPC Runtime`
-- 仓库名：`npc-runtime`
-- Python 包名：`npc_runtime`
-- CLI 名称：`npc-runtime`
+- 项目名：`Loom NPC`（中文名：`织幕`）
+- 仓库名：`loom-npc`
+- Python 包名：`loom_npc`
+- CLI 名称：`loom-npc`
 
 ## 边界
 
-NPC Runtime 关注：
+Loom NPC 关注：
 
 - NPC 的有限认知、长期记忆和角色一致性
 - LLM 输出到结构化 action 的转换
@@ -25,7 +25,7 @@ NPC Runtime 关注：
 - NPC 决策 trace、replay 和 eval
 - 可嵌入游戏原型的小型 runtime 核心
 
-NPC Runtime 不做：
+Loom NPC 不做：
 
 - 完整游戏引擎
 - 通用聊天前端
@@ -94,7 +94,7 @@ update: 更新 memory、belief、relationship 或 quest state
 ## 推荐仓库结构
 
 ```text
-npc_runtime/
+loom_npc/
   core/           # 世界、NPC、事件、行动、运行循环等核心抽象
   memory/         # 记忆存储、检索、摘要、重要性和衰减策略
   models/         # LLMAdapter、MockLLM、本地模型或 API 模型适配器
@@ -222,10 +222,10 @@ Executor：
 CLI：
 
 ```text
-npc-runtime run
-npc-runtime eval
-npc-runtime replay
-npc-runtime validate
+loom-npc run
+loom-npc eval
+loom-npc replay
+loom-npc validate
 ```
 
 要求：

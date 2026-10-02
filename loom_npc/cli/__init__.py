@@ -1,0 +1,66 @@
+"""Small command-line entrypoints for the runtime and local demo."""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Optional, Sequence
+
+from loom_npc import Runtime, load_world
+from loom_npc.evals import run_evals
+from loom_npc.replay import export_jsonl, replay_jsonl
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Execute a CLI command and return an explicit process status."""
+    parser = argparse.ArgumentParser(prog="loom-npc", description="Loom NPC / 织幕：可观察的游戏角色运行时")
+    commands = parser.add_subparsers(dest="command", required=True)
+    run = commands.add_parser("run", help="启动本地可视化 Demo，或执行一次离线决策")
+    run.add_argument("--port", type=int, default=8765)
+    run.add_argument("--world", type=Path)
+    run.add_argument("--input", help="执行一次 mock 决策并输出 trace，不启动网页")
+    run.add_argument("--actor", default="mara")
+    run.add_argument("--trace", type=Path, help="单次决策时保存 JSONL trace")
+    commands.add_parser("eval", help="执行全部固定离线行为评测")
+    validate = commands.add_parser("validate", help="校验世界配置")
+    validate.add_argument("world", type=Path, nargs="?")
+    replay = commands.add_parser("replay", help="不调用模型，校验并回放 JSONL trace")
+    replay.add_argument("trace", type=Path)
+    args = parser.parse_args(argv)
+    try:
+        if args.command == "eval":
+            result = run_evals()
+            _print(result)
+            return 0 if result["passed"] == result["total"] else 1
+        if args.command == "validate":
+            world = load_world(args.world)
+            _print({"ok": True, "world": world.to_dict()["name"], "message": "世界配置有效"})
+            return 0
+        if args.command == "replay":
+            result = replay_jsonl(args.trace.read_text(encoding="utf-8"))
+            _print(result)
+            return 0 if result["ok"] else 1
+        world = load_world(args.world)
+        if args.input is not None:
+            runtime = Runtime(world)
+            trace = runtime.step(args.actor, args.input)
+            if args.trace:
+                args.trace.parent.mkdir(parents=True, exist_ok=True)
+                args.trace.write_text(export_jsonl(runtime.traces), encoding="utf-8")
+            _print(trace)
+            return 0 if trace["status"] == "executed" else 1
+        if args.trace:
+            parser.error("--trace 需要同时提供 --input；网页可通过导出按钮保存 trace")
+        from loom_npc.integrations.server import serve
+
+        serve(world, port=args.port)
+        return 0
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 0
+
+
+def _print(value: object) -> None:
+    print(json.dumps(value, ensure_ascii=False, indent=2))

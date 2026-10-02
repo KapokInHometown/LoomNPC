@@ -1,0 +1,30 @@
+{
+  "id": "lantern_town",
+  "name": "灯港镇",
+  "tick": 0,
+  "locations": {
+    "square": {"id": "square", "name": "潮汐广场", "description": "潮声在石阶下回荡，守灯人等着一封迟到的信。", "connections": ["inn", "tower"]},
+    "inn": {"id": "inn", "name": "渡鸥旅店", "description": "旅人和信使在这里交换沿途的消息。", "connections": ["square"]},
+    "tower": {"id": "tower", "name": "旧灯塔", "description": "一道锁住的铁门，和一个只有守灯人知道的秘密。", "connections": ["square"]}
+  },
+  "actors": {
+    "player": {"id": "player", "name": "旅人", "role": "player", "persona": "初到灯港的旅人，愿意帮忙。", "goal": "送还失落的信，进入旧灯塔。", "location": "square", "inventory": ["letter"], "trust": {}, "belief": {"known_facts": ["greeting", "town"]}, "allowed_actions": ["speak", "move", "give"], "memories": []},
+    "mara": {"id": "mara", "name": "玛拉", "role": "守灯人", "persona": "克制、谨慎、珍惜承诺；只分享自己知道并获准披露的事实。", "goal": "等候弟弟的来信，守住灯塔的秘密。", "location": "square", "inventory": ["key"], "trust": {"player": 0}, "belief": {"known_facts": ["greeting", "town", "letter_request", "lighthouse_secret"]}, "allowed_actions": ["speak", "move", "give"], "memories": []},
+    "ivo": {"id": "ivo", "name": "伊沃", "role": "信使", "persona": "轻快而健谈，熟悉港口的小路。", "goal": "确认失落的信是否安全送达。", "location": "inn", "inventory": [], "trust": {"player": 0}, "belief": {"known_facts": ["greeting", "town", "smuggler_route"]}, "allowed_actions": ["speak", "move", "give"], "memories": []},
+    "orin": {"id": "orin", "name": "奥林", "role": "守卫", "persona": "简洁、守序，照规矩守护灯塔。", "goal": "守住灯塔入口，确认来者有钥匙。", "location": "tower", "inventory": [], "trust": {"player": 0}, "belief": {"known_facts": ["greeting", "town", "guard_duty"]}, "allowed_actions": ["speak", "move", "give"], "memories": []}
+  },
+  "items": {
+    "letter": {"id": "letter", "name": "失落的信", "description": "一封写给守灯人玛拉的信，封口印着海鸟。"},
+    "key": {"id": "key", "name": "灯塔钥匙", "description": "玛拉保管的黄铜钥匙，可开启旧灯塔的铁门。"}
+  },
+  "facts": {
+    "greeting": {"id": "greeting", "text": "我是{name}。愿今夜的灯火照亮你的归途。", "secret": false, "required_trust": 0, "required_quest": null},
+    "town": {"id": "town", "text": "灯港镇的潮汐广场连接着渡鸥旅店与旧灯塔。", "secret": false, "required_trust": 0, "required_quest": null},
+    "letter_request": {"id": "letter_request", "text": "守灯人玛拉在等弟弟的来信。印着海鸟的信应交到她手中。", "secret": false, "required_trust": 0, "required_quest": null},
+    "lighthouse_secret": {"id": "lighthouse_secret", "text": "灯塔第三阶下藏着旧航海图。玛拉将这份秘密托付给送回失落信件的旅人。", "secret": true, "required_trust": 1, "required_quest": "letter_delivered"},
+    "smuggler_route": {"id": "smuggler_route", "text": "退潮时，旅店后的小路会通往北侧暗礁。", "secret": false, "required_trust": 0, "required_quest": null},
+    "guard_duty": {"id": "guard_duty", "text": "进入旧灯塔需要玛拉保管的黄铜钥匙。", "secret": false, "required_trust": 0, "required_quest": null}
+  },
+  "quests": {"letter_delivered": false, "key_given": false},
+  "events": []
+}

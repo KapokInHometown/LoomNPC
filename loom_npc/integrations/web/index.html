@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#eaf2f5">
+  <title>Loom NPC 织幕 · 灯港镇</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23203949'/%3E%3Cpath d='M18 14v36M30 14v36M42 14v36M14 23h36M14 35h36M14 47h36' stroke='%23f4ead0' stroke-width='4'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#conversation-input">跳至场景互动</a>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Loom 织幕 首页">
+      <svg class="brand-mark" viewBox="0 0 38 38" aria-hidden="true"><path d="M9 3v32M19 3v32M29 3v32M3 9h32M3 19h32M3 29h32"/><path class="gold-thread" d="M19 3v16h16"/></svg>
+      <span class="brand-name">Loom<small>NPC</small><span>织幕</span></span>
+    </a>
+    <nav class="top-nav" aria-label="页面导航"><a class="active" href="#world-stage">故事现场</a><a href="#timeline">事件记录</a></nav>
+    <div class="header-tools"><span class="model-indicator" title="使用确定性 Mock 模型，无外部模型调用"><span></span>Mock · 离线运行</span><button id="reset-button" class="text-button" type="button">重置世界</button></div>
+  </header>
+
+  <main class="app-shell">
+    <section class="intro" aria-labelledby="page-title">
+      <div><p class="chapter-label"><span class="tiny-diamond"></span>灯港镇 · 可交互原型</p><h1 id="page-title">每个角色，<br class="mobile-break">都有自己的世界。</h1><p class="intro-description">一封未送达的信，一座上锁的灯塔。看看信任如何改变角色的选择。</p></div>
+      <button id="eval-button" class="secondary-button" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-9M4 3h5M4 17h12"/></svg>运行行为评测</button>
+    </section>
+
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+    <div class="workspace">
+      <div class="world-column">
+        <section id="world-stage" class="world-stage" aria-label="灯港镇世界地图">
+          <div class="map-topline"><div><span class="map-title">灯港镇</span><span class="map-subtitle">海风吹过，故事尚未开始</span></div><div class="tick-label"><span class="sun-icon" aria-hidden="true">☼</span><span id="tick-label">第 0 回合</span></div></div>
+          <div class="map-canvas">
+            <svg class="town-map" viewBox="0 0 960 560" role="img" aria-labelledby="map-art-title map-art-description">
+              <title id="map-art-title">灯港镇，海边的小世界</title><desc id="map-art-description">镇中广场连接西侧旅店与东侧灯塔。地图上的角色可以点击选择。</desc>
+              <defs>
+                <pattern id="sea-lines" x="0" y="0" width="100" height="46" patternUnits="userSpaceOnUse"><path d="M8 24q12 5 24 0m28-8q9 4 18 0" fill="none" stroke="#b5d2d8" stroke-width="1.4" opacity=".65"/></pattern>
+                <pattern id="stone-grid" width="30" height="15" patternUnits="userSpaceOnUse" patternTransform="rotate(-26)"><path d="M0 0h30M15 0v15" fill="none" stroke="#d2dbd6" stroke-width=".7"/></pattern>
+                <filter id="paper-shadow" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="13" stdDeviation="10" flood-color="#446774" flood-opacity=".13"/></filter>
+                <symbol id="pine" viewBox="0 0 42 72"><path d="M21 41v28" stroke="#789386" stroke-width="4"/><path d="m21 0 17 30H28l14 25H0l14-25H4Z" fill="#8fac9c"/><path d="M21 0v55H0l14-25H4Z" fill="#a9bfae"/></symbol>
+                <symbol id="bush" viewBox="0 0 44 30"><ellipse cx="22" cy="26" rx="21" ry="4" fill="#b5c6b2" opacity=".5"/><path d="M2 24C-3 10 9 4 17 10 15-2 33-4 34 9c13-3 13 18 3 17H6Z" fill="#a8bba2"/><path d="M14 13c6-3 8 3 8 5" fill="none" stroke="#c4d0b3" stroke-width="3"/></symbol>
+              </defs>
+              <rect width="960" height="560" fill="#e8f1f3"/>
+              <path d="M0 340C167 280 161 481 369 471S674 325 960 374V560H0Z" fill="#d5e8ed"/>
+              <path d="M0 373C148 318 187 511 369 499S674 351 960 407" fill="none" stroke="#f7fbf8" stroke-width="3" opacity=".8"/>
+              <path d="M0 362C146 305 193 490 367 482S685 337 960 389V560H0Z" fill="url(#sea-lines)"/>
+              <path d="m85 321 97-133 250-87 231 20 178 114-16 116-170 82-233 32-192-32Z" fill="#aabbb2" opacity=".15"/>
+              <path d="m86 303 95-131 251-87 231 20 178 114-16 116-170 82-233 32-192-32Z" fill="#b8c4b1"/>
+              <path d="m86 303 95-131 251-87 231 20 178 114-16 103-169 82-234 32-192-32Z" fill="#e4e8d6"/>
+              <path d="m86 303 144 101 192 32 234-32 169-82" fill="none" stroke="#f6f5e9" stroke-width="5"/>
+              <path d="m145 250 130-81 142-27 78 24 175-11 91 56-19 102-133 50-236 31-133-47Z" fill="#eaf0df"/>
+              <path d="m298 198 47 21 163 66 88-35 122-61 28 17-160 94-72 27-206-104-34-8Z" fill="#faf9ed"/>
+              <path d="m483 299 45 13-60 103-42-7Z" fill="#faf9ed"/>
+              <path d="m320 207 178 85 93-32 149-66" fill="none" stroke="#d9d8c5" stroke-width="2" stroke-dasharray="3 5"/>
+              <path d="m498 310-48 99" fill="none" stroke="#d9d8c5" stroke-width="2" stroke-dasharray="3 5"/>
+              <ellipse cx="492" cy="290" rx="68" ry="36" fill="#e7e4d6"/>
+              <ellipse cx="492" cy="286" rx="66" ry="33" fill="#f8f6e9" stroke="#d4d6c8" stroke-width="2"/>
+              <ellipse cx="492" cy="286" rx="61" ry="29" fill="url(#stone-grid)"/>
+              <!-- The inn: painted wood, slate roof, a lit window. -->
+              <g filter="url(#paper-shadow)">
+                <path d="m182 184 81-43 95 46-82 45Z" fill="#b1c0b8" opacity=".45" transform="translate(0 57)"/>
+                <path d="m190 161 76 39v65l-76-40Z" fill="#e1d8bd"/>
+                <path d="m266 200 80-42v66l-80 41Z" fill="#f8f0d9"/>
+                <path d="m176 163 46-57 87 42-43 56Z" fill="#577d84"/>
+                <path d="m266 204 43-56 47 18-12-17-35-26-87-42-46 57Z" fill="#375b68" opacity="0"/>
+                <path d="m222 106 89 41 45 17-44-66Z" fill="#6b9394"/>
+                <path d="m311 98-89 8 87 41 47 17Z" fill="#426a77"/>
+                <path d="m176 163 90 44 91-42" fill="none" stroke="#305465" stroke-width="5" stroke-linejoin="round"/>
+                <path d="m212 183 19 9v27l-19-10Z" fill="#f5dea2" stroke="#acac97" stroke-width="3"/>
+                <path d="m294 207 18-10v42l-18 9Z" fill="#718885"/>
+                <path d="m326 189 12-6v19l-12 6Z" fill="#d6b977"/>
+                <path d="m246 215 12 6v24l-12-6Z" fill="#8a9d97"/>
+                <path d="m235 119 12-7v-27l-12 7Z" fill="#c4bb9e"/><path d="m247 112 10 5V90l-10-5Z" fill="#e7dfc6"/>
+                <path d="m300 211 38-20v9l-38 20Z" fill="#b58748"/>
+              </g>
+              <!-- Archive and awning at the market edge. -->
+              <g filter="url(#paper-shadow)"><path d="m361 139 53 26v51l-53-27Z" fill="#d5d7c6"/><path d="m414 165 49-27v51l-49 27Z" fill="#f9f2de"/><path d="m354 138 49-43 68 42-57 32Z" fill="#9baaaa"/><path d="m403 95 11 74 57-32Z" fill="#758f96"/><path d="m429 171 15-8v23l-15 8Z" fill="#719399"/><path d="m375 164 16 8v16l-16-8Z" fill="#94acaa"/><path d="m434 202 30-14v17l-30 15Z" fill="#c8b58b"/></g>
+              <g><path d="m378 278 36-18 40 20-35 18Z" fill="#d6bb7b"/><path d="m378 278 41 20v9l-41-20Z" fill="#c5a265"/><path d="m419 298 35-18v9l-35 18Z" fill="#e8d7ab"/><path d="M383 284v28m64-28v28" stroke="#9da18a" stroke-width="3"/><path d="m375 271 36-31 46 24-38 25Z" fill="#f4edd8"/><path d="m387 262 7-6 41 24-8 5Zm15-13 7-6 42 24-8 5Z" fill="#bba069"/></g>
+              <!-- Lighthouse on the rocky headland. -->
+              <path d="m663 254 57-51 92 40-14 47-88 31-65-30Z" fill="#c8d0bf"/><path d="m675 255 52-38 64 29-10 36-71 23-54-18Z" fill="#d9ddca"/>
+              <g filter="url(#paper-shadow)">
+                <path d="m702 220 5-91 34 15 5 93-23 13Z" fill="#f9f4e3"/><path d="m702 220 5-91 16 8v113Z" fill="#ded8bf"/>
+                <path d="m705 166 18 9 20-10 2 18-22 12-19-11Z" fill="#607f85"/>
+                <path d="m697 135 26 13 27-15v-13l-27 13-26-12Z" fill="#889c96"/>
+                <path d="m704 116 19 9 19-10V88l-19 9-19-9Z" fill="#e8ca77"/>
+                <path d="M712 94v26m11-23v27m12-31v27" stroke="#6d8a8d" stroke-width="3"/>
+                <path d="m696 88 27-29 27 27-27 14Z" fill="#486977"/><path d="M723 59V46" stroke="#577581" stroke-width="3"/><path d="m723 48 20 7-20 4Z" fill="#bf9750"/>
+                <path d="m716 228 14-7v-24l-14 7Z" fill="#6e8b8d"/>
+                <path d="m697 133 26 13 29-15M697 123v-11m13 17v-11m13 17v-11m14 4v-11m15 7v-11" fill="none" stroke="#547580" stroke-width="2"/>
+              </g>
+              <!-- Greenery, pier, and a single moored boat. -->
+              <use href="#pine" x="124" y="233" width="42" height="72"/><use href="#pine" x="146" y="181" width="35" height="60"/><use href="#pine" x="576" y="118" width="41" height="70"/><use href="#pine" x="610" y="135" width="32" height="57"/><use href="#pine" x="800" y="236" width="32" height="55"/>
+              <use href="#bush" x="309" y="326" width="44" height="30"/><use href="#bush" x="562" y="335" width="40" height="28"/><use href="#bush" x="775" y="310" width="44" height="30"/><use href="#bush" x="343" y="113" width="35" height="24"/>
+              <g stroke="#ab9d7b" stroke-width="2"><path d="m435 413 17-6 79 58-19 9Z" fill="#cbb994"/><path d="m446 421 17-6m-7 14 18-6m-8 14 18-6m-7 14 17-6m-6 14 17-6m-7 14 17-6"/><path d="M441 413v20m41 9v20m43 3v19" fill="none" stroke-width="4"/></g>
+              <g transform="translate(551 452) rotate(-22)"><path d="M-7 7Q15 28 49 4Q16-13-7 7Z" fill="#97b0b1" opacity=".25" transform="translate(4 10)"/><path d="M-8 2Q13 25 46 2Q16-13-8 2Z" fill="#a58c68"/><path d="M-3 2Q15 16 39 2Q17-7-3 2Z" fill="#e8d7b4"/><path d="M15-3v14m12-15v12" stroke="#ad9670" stroke-width="3"/><path d="m8-11 24 34" stroke="#79989d" stroke-width="3"/></g>
+              <path d="m125 111 6-2 6 2m9-10 5-2 6 2m700 48 7-3 8 3m-3 12 5-2 6 2" fill="none" stroke="#97b3ba" stroke-width="2" stroke-linecap="round"/>
+              <g fill="#8ba8af" font-family="Avenir Next, PingFang SC, sans-serif" font-size="12" letter-spacing="4"><text x="699" y="448" transform="rotate(-10 699 448)">雾 海</text></g>
+            </svg>
+            <div class="location-label location-inn">渡鸥旅店</div><div class="location-label location-square">潮汐广场</div><div class="location-label location-tower">旧灯塔 · 上锁</div>
+            <div id="map-characters" class="map-characters" aria-label="选择角色"></div>
+            <div class="compass" aria-hidden="true"><span>北</span><svg viewBox="0 0 28 38"><path d="m14 4-7 23 7-6 7 6Z" fill="none" stroke="currentColor"/><path d="M14 4v30" stroke="currentColor"/></svg></div>
+          </div>
+          <div class="map-bottomline"><span><span class="legend-dot npc-dot"></span>点击角色，查看他的世界</span><span><span class="legend-dot player-dot"></span>你 · 旅人</span><span id="quest-status" class="quest-status"><span class="letter-icon" aria-hidden="true">▱</span>随身携带一封信</span></div>
+        </section>
+
+        <section class="interaction" aria-labelledby="interaction-title">
+          <div class="interaction-header"><h2 id="interaction-title">与 <span id="conversation-name">角色</span> 交谈</h2><span id="interaction-location">选择地图上的一位角色</span></div>
+          <form id="conversation-form" class="conversation-form"><label class="sr-only" for="conversation-input">对角色说的话</label><textarea id="conversation-input" rows="1" maxlength="2000" placeholder="从一句「你好」开始……" required></textarea><button id="send-button" type="submit" class="primary-button">发送 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 12-6-4 12-3-5-5-1Zm5 1 7-7"/></svg></button></form>
+          <div class="quick-actions" aria-label="可体验的场景"><span class="quick-label">试一试</span><button type="button" data-scenario="greet">打个招呼</button><button type="button" data-scenario="secret">询问灯塔秘密</button><button type="button" data-scenario="letter" class="suggested-action">交付信件 <span aria-hidden="true">✧</span></button><button type="button" data-scenario="key">索要钥匙</button><button type="button" data-scenario="move">前往灯塔</button><button type="button" data-scenario="unknown" class="boundary-action" title="直接提交角色未知的话题，验证知识边界">测试知识边界</button></div>
+          <p class="scenario-note" id="scenario-note">建议路径：问秘密 → 交付信件 → 再问秘密 → 索要钥匙 → 前往灯塔。</p>
+        </section>
+
+        <section id="timeline" class="timeline" aria-labelledby="timeline-title"><div class="section-heading"><h2 id="timeline-title">故事正在发生<span id="event-count">0 条决策</span></h2><div class="trace-tools"><button id="replay-button" class="text-button" type="button" disabled>回放</button><button id="export-button" class="text-button" type="button" disabled>导出 JSONL <span aria-hidden="true">↓</span></button></div></div><ol id="event-list" class="event-list"><li class="empty-timeline"><span class="empty-thread" aria-hidden="true">⌁</span><div><strong>这里会留下每一次选择。</strong><p>与角色交谈，或试着送出那封信。被规则拒绝的行动也会被记录。</p></div></li></ol></section>
+      </div>
+
+      <aside class="inspector" aria-label="角色与决策检查器">
+        <section class="character-profile"><div class="profile-topline"><span>角色手册</span><span id="npc-index">01 / 03</span></div><div class="profile-identity"><div id="profile-avatar" class="profile-avatar" aria-hidden="true"></div><div><h2 id="profile-name">正在读取世界</h2><p id="profile-role">NPC</p></div><span id="profile-location" class="location-badge">—</span></div><p id="profile-persona" class="profile-persona">连接本地运行时，加载角色的观察、认知与记忆。</p><div class="trust-row"><span>对旅人的信任</span><div id="trust-meter" class="trust-meter" aria-label="信任值"><span></span><span></span><span></span><span></span><span></span></div><strong id="trust-value">0</strong></div></section>
+        <div class="inspector-tabs" role="tablist" aria-label="检查器视图"><button id="tab-knowledge" type="button" role="tab" aria-selected="true" aria-controls="panel-knowledge" data-tab="knowledge">角色认知</button><button id="tab-trace" type="button" role="tab" aria-selected="false" aria-controls="panel-trace" data-tab="trace" tabindex="-1">决策轨迹</button><button id="tab-world" type="button" role="tab" aria-selected="false" aria-controls="panel-world" data-tab="world" tabindex="-1">世界真相</button></div>
+        <section id="panel-knowledge" role="tabpanel" aria-labelledby="tab-knowledge" class="inspector-panel"><p class="panel-description"><span class="eye-icon" aria-hidden="true">◉</span>角色只能基于自己的认知行动。</p><div class="inspector-section"><h3>他知道的事<span id="knowledge-count">0</span></h3><ul id="knowledge-list" class="knowledge-list"></ul></div><div class="inspector-section"><h3>当前目标</h3><p id="profile-goal" class="goal-text">—</p></div><div class="inspector-section"><h3>记忆片段<span id="memory-count">0</span></h3><ul id="memory-list" class="memory-list"></ul></div><div class="inspector-section"><h3>随身物品</h3><div id="inventory-list" class="inventory-list"></div></div><div class="inspector-footnote"><span aria-hidden="true">⌁</span><p>认知可以有限，记忆可以不完整。<br>世界规则始终守住行动边界。</p></div></section>
+        <section id="panel-trace" role="tabpanel" aria-labelledby="tab-trace" class="inspector-panel" hidden><div id="trace-content" class="trace-content"><div class="inspector-empty"><span aria-hidden="true">⌁</span><h3>每次决定都有来路。</h3><p>完成一次互动后，查看从观察到执行的完整轨迹。</p></div></div></section>
+        <section id="panel-world" role="tabpanel" aria-labelledby="tab-world" class="inspector-panel" hidden><p class="world-warning">观察者视角。这里的隐藏信息不会自动进入角色上下文。</p><div class="inspector-section"><h3>任务进展</h3><ul id="quest-list" class="quest-list"></ul></div><div class="inspector-section"><h3>世界事实</h3><ul id="world-fact-list" class="world-fact-list"></ul></div></section>
+      </aside>
+    </div>
+    <footer class="site-footer"><span>Loom 织幕 <span class="footer-separator">/</span> 可信、可控、可测试的 NPC 行为</span><span>本地原型 · 确定性 Mock · 无需 API Key</span></footer>
+  </main>
+  <dialog id="result-dialog" class="result-dialog"><div class="dialog-heading"><h2 id="dialog-title">行为评测</h2><button id="dialog-close" class="icon-button" type="button" aria-label="关闭结果">×</button></div><div id="dialog-content"></div><button id="dialog-done" class="primary-button dialog-done" type="button">完成</button></dialog>
+</body>
+</html>
