@@ -8,6 +8,7 @@ from typing import Optional, Sequence
 
 from loom_npc import Runtime, load_world
 from loom_npc.evals import run_evals
+from loom_npc.models import MockLLM
 from loom_npc.replay import export_jsonl, replay_jsonl
 
 
@@ -15,12 +16,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     """Execute a CLI command and return an explicit process status."""
     parser = argparse.ArgumentParser(prog="loom-npc", description="Loom NPC / 织幕：可观察的游戏角色运行时")
     commands = parser.add_subparsers(dest="command", required=True)
-    run = commands.add_parser("run", help="启动本地可视化 Demo，或执行一次离线决策")
+    run = commands.add_parser("run", help="启动本地可视化 Demo，或执行一次决策；默认离线 Mock")
     run.add_argument("--port", type=int, default=8765)
     run.add_argument("--world", type=Path)
-    run.add_argument("--input", help="执行一次 mock 决策并输出 trace，不启动网页")
+    run.add_argument("--input", help="执行一次所选模型的决策并输出 trace，不启动网页")
     run.add_argument("--actor", default="mara")
     run.add_argument("--trace", type=Path, help="单次决策时保存 JSONL trace")
+    run.add_argument("--provider", choices=("mock", "deepseek"), default="mock")
+    run.add_argument("--model", default="deepseek-flash", help="DeepSeek 模型名")
+    run.add_argument("--api-key-file", type=Path, help="显式读取本地密钥文件；否则使用 DEEPSEEK_API_KEY")
+    run.add_argument("--timeout", type=float, default=30, help="DeepSeek 网络超时秒数，默认 30")
     commands.add_parser("eval", help="执行全部固定离线行为评测")
     validate = commands.add_parser("validate", help="校验世界配置")
     validate.add_argument("world", type=Path, nargs="?")
@@ -41,19 +46,28 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             _print(result)
             return 0 if result["ok"] else 1
         world = load_world(args.world)
+        if args.trace and args.input is None:
+            parser.error("--trace 需要同时提供 --input；网页可通过导出按钮保存 trace")
+        if args.api_key_file and args.provider != "deepseek":
+            parser.error("--api-key-file 需要同时提供 --provider deepseek")
+        adapter = MockLLM()
+        model_name = "deterministic-mock"
+        if args.provider == "deepseek":
+            from loom_npc.models.deepseek import DeepSeekAdapter, load_api_key
+
+            adapter = DeepSeekAdapter(load_api_key(args.api_key_file), model=args.model, timeout=args.timeout)
+            model_name = args.model
         if args.input is not None:
-            runtime = Runtime(world)
+            runtime = Runtime(world, adapter=adapter)
             trace = runtime.step(args.actor, args.input)
             if args.trace:
                 args.trace.parent.mkdir(parents=True, exist_ok=True)
                 args.trace.write_text(export_jsonl(runtime.traces), encoding="utf-8")
             _print(trace)
             return 0 if trace["status"] == "executed" else 1
-        if args.trace:
-            parser.error("--trace 需要同时提供 --input；网页可通过导出按钮保存 trace")
         from loom_npc.integrations.server import serve
 
-        serve(world, port=args.port)
+        serve(world, port=args.port, adapter=adapter, provider=args.provider, model=model_name)
         return 0
     except (OSError, ValueError, TypeError, KeyError) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False), file=sys.stderr)

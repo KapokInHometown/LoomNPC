@@ -11,7 +11,7 @@ Loom NPC（织幕）是面向 LLM 驱动游戏 NPC 的轻量级运行时。
 命名约定：
 
 - 项目名：`Loom NPC`（中文名：`织幕`）
-- 仓库名：`loom-npc`
+- 仓库名：`LoomNPC`
 - Python 包名：`loom_npc`
 - CLI 名称：`loom-npc`
 

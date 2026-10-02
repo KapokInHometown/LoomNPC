@@ -179,6 +179,10 @@ ul,ol {
   align-items:center;
   gap:7px
 }
+.model-indicator[data-provider="deepseek"]>span {
+  background:var(--lake);
+  box-shadow:0 0 0 3px #e0edef
+}
 .model-indicator>span {
   width:6px;
   height:6px;
@@ -596,6 +600,12 @@ textarea::placeholder {
   color:#a0acae;
   font-size:10px;
   margin-right:3px
+}
+.model-note {
+  font-size:11px;
+  color:#718b94;
+  line-height:1.85;
+  margin-top:12px
 }
 .scenario-note {
   font-size:10px;

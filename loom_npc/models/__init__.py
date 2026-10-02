@@ -2,7 +2,11 @@
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, Protocol
+from typing import Any, Dict, Optional, Protocol
+
+
+class ModelError(RuntimeError):
+    """Adapter failure whose message is safe to record; never include credentials."""
 
 
 @dataclass(frozen=True)
@@ -10,6 +14,8 @@ class ModelDecision:
     """Untrusted model output awaiting strict parsing and verification."""
 
     raw_output: str
+    # Only the inference payload and prompt provenance, never headers or credentials.
+    request: Optional[Dict[str, Any]] = None
 
 
 class LLMAdapter(Protocol):

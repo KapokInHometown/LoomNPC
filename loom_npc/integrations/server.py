@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 from loom_npc import Runtime, load_world
 from loom_npc.core import WorldState
 from loom_npc.evals import run_evals
+from loom_npc.models import LLMAdapter
 from loom_npc.replay import export_jsonl, replay_jsonl
 
 WEB_ROOT = Path(__file__).with_name("web")
@@ -19,9 +20,13 @@ MAX_BODY = 2 * 1024 * 1024
 class DemoSession:
     """Own one demo world; serialize requests so traces remain ordered."""
 
-    def __init__(self, world: Optional[WorldState] = None) -> None:
+    def __init__(self, world: Optional[WorldState] = None, adapter: Optional[LLMAdapter] = None,
+                 provider: str = "mock", model: str = "deterministic-mock") -> None:
         self.initial = (world or load_world()).to_dict()
-        self.runtime = Runtime(load_world_from_dict(self.initial))
+        self.adapter = adapter
+        self.provider = provider
+        self.model = model
+        self.runtime = Runtime(load_world_from_dict(self.initial), adapter=self.adapter)
         self.lock = threading.Lock()
 
     def state(self) -> Dict[str, Any]:
@@ -31,7 +36,8 @@ class DemoSession:
             "traces": self.runtime.traces,
             "scenario": {
                 "name": "灯港镇的一封信",
-                "model": "deterministic-mock",
+                "provider": self.provider,
+                "model": self.model,
                 "description": "交付信件，建立信任，再打开灯塔。",
                 "debugger": True,
             },
@@ -116,7 +122,7 @@ def make_handler(session: DemoSession) -> Type[BaseHTTPRequestHandler]:
 
         def dispatch(self, path: str, data: Dict[str, Any]) -> None:
             if path == "/api/reset":
-                session.runtime = Runtime(load_world_from_dict(session.initial))
+                session.runtime = Runtime(load_world_from_dict(session.initial), adapter=session.adapter)
                 self.json(session.state())
             elif path == "/api/step":
                 actor = data.get("actor_id", "mara")
@@ -143,13 +149,18 @@ def make_handler(session: DemoSession) -> Type[BaseHTTPRequestHandler]:
     return Handler
 
 
-def create_server(world: Optional[WorldState] = None, port: int = 8765) -> ThreadingHTTPServer:
+def create_server(world: Optional[WorldState] = None, port: int = 8765,
+                  adapter: Optional[LLMAdapter] = None, provider: str = "mock",
+                  model: str = "deterministic-mock") -> ThreadingHTTPServer:
     """Create a loopback-only HTTP server; port 0 is useful for tests."""
-    return ThreadingHTTPServer(("127.0.0.1", port), make_handler(DemoSession(world)))
+    return ThreadingHTTPServer(("127.0.0.1", port), make_handler(DemoSession(world, adapter, provider, model)))
 
 
-def serve(world: Optional[WorldState] = None, port: int = 8765) -> None:
+def serve(world: Optional[WorldState] = None, port: int = 8765,
+          adapter: Optional[LLMAdapter] = None, provider: str = "mock",
+          model: str = "deterministic-mock") -> None:
     """Serve the visual demo until interrupted."""
-    with create_server(world, port) as server:
-        print("Loom NPC / 织幕： http://127.0.0.1:%s（离线 Mock，Ctrl+C 停止）" % server.server_port, flush=True)
+    with create_server(world, port, adapter, provider, model) as server:
+        mode = "离线 Mock" if provider == "mock" else "DeepSeek 在线 · " + model
+        print("Loom NPC / 织幕： http://127.0.0.1:%s（%s，Ctrl+C 停止）" % (server.server_port, mode), flush=True)
         server.serve_forever()

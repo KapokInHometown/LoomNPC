@@ -17,13 +17,13 @@
       <span class="brand-name">Loom<small>NPC</small><span>织幕</span></span>
     </a>
     <nav class="top-nav" aria-label="页面导航"><a class="active" href="#world-stage">故事现场</a><a href="#timeline">事件记录</a></nav>
-    <div class="header-tools"><span class="model-indicator" title="使用确定性 Mock 模型，无外部模型调用"><span></span>Mock · 离线运行</span><button id="reset-button" class="text-button" type="button">重置世界</button></div>
+    <div class="header-tools"><span class="model-indicator" title="正在读取运行模型"><span></span>连接运行时…</span><button id="reset-button" class="text-button" type="button">重置世界</button></div>
   </header>
 
   <main class="app-shell">
     <section class="intro" aria-labelledby="page-title">
       <div><p class="chapter-label"><span class="tiny-diamond"></span>灯港镇 · 可交互原型</p><h1 id="page-title">每个角色，<br class="mobile-break">都有自己的世界。</h1><p class="intro-description">一封未送达的信，一座上锁的灯塔。看看信任如何改变角色的选择。</p></div>
-      <button id="eval-button" class="secondary-button" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-9M4 3h5M4 17h12"/></svg>运行行为评测</button>
+      <button id="eval-button" class="secondary-button" type="button" title="使用固定 Mock 输入运行离线评测，不调用在线模型"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-9M4 3h5M4 17h12"/></svg>Mock 离线评测</button>
     </section>
 
     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
@@ -107,8 +107,9 @@
 
         <section class="interaction" aria-labelledby="interaction-title">
           <div class="interaction-header"><h2 id="interaction-title">与 <span id="conversation-name">角色</span> 交谈</h2><span id="interaction-location">选择地图上的一位角色</span></div>
-          <form id="conversation-form" class="conversation-form"><label class="sr-only" for="conversation-input">对角色说的话</label><textarea id="conversation-input" rows="1" maxlength="2000" placeholder="从一句「你好」开始……" required></textarea><button id="send-button" type="submit" class="primary-button">发送 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 12-6-4 12-3-5-5-1Zm5 1 7-7"/></svg></button></form>
+          <form id="conversation-form" class="conversation-form"><label class="sr-only" for="conversation-input">对角色说的话</label><textarea id="conversation-input" rows="1" maxlength="2000" placeholder="从一句「你好」开始……" required></textarea><button id="send-button" type="submit" class="primary-button"><span id="send-button-label">发送</span> <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 12-6-4 12-3-5-5-1Zm5 1 7-7"/></svg></button></form>
           <div class="quick-actions" aria-label="可体验的场景"><span class="quick-label">试一试</span><button type="button" data-scenario="greet">打个招呼</button><button type="button" data-scenario="secret">询问灯塔秘密</button><button type="button" data-scenario="letter" class="suggested-action">交付信件 <span aria-hidden="true">✧</span></button><button type="button" data-scenario="key">索要钥匙</button><button type="button" data-scenario="move">前往灯塔</button><button type="button" data-scenario="unknown" class="boundary-action" title="直接提交角色未知的话题，验证知识边界">测试知识边界</button></div>
+          <p class="model-note" id="model-note"></p>
           <p class="scenario-note" id="scenario-note">建议路径：问秘密 → 交付信件 → 再问秘密 → 索要钥匙 → 前往灯塔。</p>
         </section>
 
@@ -123,7 +124,7 @@
         <section id="panel-world" role="tabpanel" aria-labelledby="tab-world" class="inspector-panel" hidden><p class="world-warning">观察者视角。这里的隐藏信息不会自动进入角色上下文。</p><div class="inspector-section"><h3>任务进展</h3><ul id="quest-list" class="quest-list"></ul></div><div class="inspector-section"><h3>世界事实</h3><ul id="world-fact-list" class="world-fact-list"></ul></div></section>
       </aside>
     </div>
-    <footer class="site-footer"><span>Loom 织幕 <span class="footer-separator">/</span> 可信、可控、可测试的 NPC 行为</span><span>本地原型 · 确定性 Mock · 无需 API Key</span></footer>
+    <footer class="site-footer"><span>Loom 织幕 <span class="footer-separator">/</span> 可信、可控、可测试的 NPC 行为</span><span id="runtime-footer">正在读取运行模型</span></footer>
   </main>
   <dialog id="result-dialog" class="result-dialog"><div class="dialog-heading"><h2 id="dialog-title">行为评测</h2><button id="dialog-close" class="icon-button" type="button" aria-label="关闭结果">×</button></div><div id="dialog-content"></div><button id="dialog-done" class="primary-button dialog-done" type="button">完成</button></dialog>
 </body>

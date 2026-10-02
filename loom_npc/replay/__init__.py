@@ -30,8 +30,10 @@ def replay_jsonl(text: str) -> Dict[str, Any]:
             if not isinstance(trace, dict):
                 raise ValueError("Trace must be an object")
             required = {"id", "tick", "actor_id", "input", "source", "context", "raw_output", "action", "verification", "execution", "status", "errors", "before", "after", "state_diff"}
-            if set(trace) != required:
+            if not required <= set(trace) <= required | {"model_request"}:
                 raise ValueError("Trace fields do not match the schema")
+            if "model_request" in trace:
+                _require(trace["source"] == "adapter" and isinstance(trace["model_request"], dict), "Invalid model request provenance")
             if world is None:
                 world = WorldState.from_dict(trace["before"])
             _require(trace["before"] == world.to_dict(), "World-state continuity mismatch")

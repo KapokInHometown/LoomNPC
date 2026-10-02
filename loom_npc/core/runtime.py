@@ -3,7 +3,7 @@
 import copy
 from typing import Any, Dict, Optional
 
-from ..models import LLMAdapter, MockLLM, ModelDecision
+from ..models import LLMAdapter, MockLLM, ModelDecision, ModelError
 from ..verifier import ActionVerifier, result
 from .context import build_context
 from .executor import Executor, state_diff
@@ -22,7 +22,7 @@ class Runtime:
         self.executor = Executor()
 
     def step(self, actor_id: str, player_input: str, proposed_action: Any = None) -> Dict[str, Any]:
-        """Run the bounded offline pipeline; every failure produces a trace."""
+        """Run the decision pipeline; every failure produces a trace."""
         before = self.world.to_dict()
         trace = {
             "id": "trace-{:04d}".format(len(self.traces) + 1),
@@ -47,7 +47,13 @@ class Runtime:
                 decision = self.adapter.generate_decision(copy.deepcopy(trace["context"]))
                 if not isinstance(decision, ModelDecision) or not isinstance(decision.raw_output, str):
                     raise TypeError("Adapter must return ModelDecision with text output")
+                if decision.request is not None:
+                    if not isinstance(decision.request, dict):
+                        raise TypeError("Model request provenance must be an object")
+                    trace["model_request"] = copy.deepcopy(decision.request)
                 trace["raw_output"] = decision.raw_output
+            except ModelError as error:
+                return self._finish(trace, "model_error", "decide", "MODEL_ERROR", str(error))
             except Exception as error:
                 message = "模型适配器执行失败（" + type(error).__name__ + "）。"
                 return self._finish(trace, "model_error", "decide", "MODEL_ERROR", message)

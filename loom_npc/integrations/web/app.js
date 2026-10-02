@@ -2,7 +2,7 @@
 
 // The browser is a debugger and a player interface. Only the server builds NPC context.
 const $ = (selector) => document.querySelector(selector);
-const ui = { world: null, traces: [], selectedId: "mara", traceId: null, busy: false, tab: "knowledge" };
+const ui = { world: null, traces: [], scenario: null, selectedId: "mara", traceId: null, busy: false, tab: "knowledge" };
 const locationPoints = { square: [51, 56], inn: [29, 44], tower: [75, 47] };
 const palette = {
   mara: { coat: "#648a84", light: "#adc3aa", hair: "#645954", skin: "#e7c9a2" },
@@ -29,7 +29,8 @@ function pretty(value) { return typeof value === "string" ? value : JSON.stringi
 
 function normalizeState(data) {
   if (!data.world || !data.world.actors || !Array.isArray(data.traces)) throw new Error("世界数据不完整，请重置后重试。");
-  return { world: data.world, traces: data.traces };
+  if (!data.scenario || !["mock", "deepseek"].includes(data.scenario.provider)) throw new Error("运行模型信息不完整，请刷新页面重试。");
+  return { world: data.world, traces: data.traces, scenario: data.scenario };
 }
 
 function showNotice(message, error = false) {
@@ -39,13 +40,14 @@ function showNotice(message, error = false) {
   notice.hidden = !message;
 }
 
-function setBusy(value) {
+function setBusy(value, label = "处理中…") {
   ui.busy = value;
   document.querySelectorAll("#conversation-form button, #reset-button, #eval-button, [data-scenario], .map-character:not(.player)").forEach((button) => { button.disabled = value; });
   $("#conversation-input").disabled = value;
   $("#replay-button").disabled = value || ui.traces.length === 0;
   $("#export-button").disabled = value || ui.traces.length === 0;
   $("#send-button").setAttribute("aria-busy", String(value));
+  $("#send-button-label").textContent = value ? label : "发送";
 }
 
 async function request(path, body, asText = false) {
@@ -59,10 +61,10 @@ async function request(path, body, asText = false) {
   return asText ? response.text() : response.json();
 }
 
-async function runOperation(operation) {
+async function runOperation(operation, pendingMessage = "", pendingLabel = "处理中…") {
   if (ui.busy) return;
-  setBusy(true);
-  showNotice("");
+  setBusy(true, pendingLabel);
+  showNotice(pendingMessage);
   try { await operation(); }
   catch (error) { showNotice(error.message === "Failed to fetch" ? "无法连接本地运行时。请确认 Demo 服务仍在运行，再刷新页面。" : error.message, true); }
   finally { setBusy(false); }
@@ -72,10 +74,28 @@ function applyState(data) {
   const state = normalizeState(data);
   ui.world = state.world;
   ui.traces = state.traces;
+  ui.scenario = state.scenario;
   if (!ui.world.actors[ui.selectedId]) ui.selectedId = Object.keys(ui.world.actors).find((id) => id !== "player") || "player";
   if (data.trace) ui.traceId = data.trace.id;
   else if (!ui.traces.some((trace) => trace.id === ui.traceId)) ui.traceId = ui.traces.at(-1)?.id || null;
   render();
+}
+
+function renderModel() {
+  const online = ui.scenario.provider === "deepseek";
+  const provider = online ? "DeepSeek" : "Mock";
+  const indicator = $(".model-indicator");
+  indicator.dataset.provider = ui.scenario.provider;
+  indicator.replaceChildren(el("span"), document.createTextNode(online ? "DeepSeek · 在线" : "Mock · 离线运行"));
+  indicator.title = `当前模型：${ui.scenario.model}`;
+  $("#runtime-footer").textContent = online ? `本地运行时 · DeepSeek 在线 · ${ui.scenario.model}` : "本地原型 · 确定性 Mock · 无需 API Key";
+  $("#model-note").textContent = online
+    ? "文本输入、问候、询问秘密与索要钥匙由 DeepSeek 决策；交信、移动与知识边界测试直接提交固定行动。输入与角色可见上下文会发至 DeepSeek，密钥仅由本地服务持有。"
+    : "文本输入、问候、询问秘密与索要钥匙由本地 Mock 决策；交信、移动与知识边界测试直接提交固定行动，均不调用外部模型。";
+  document.querySelectorAll("[data-scenario]").forEach((button) => {
+    const usesModel = ["greet", "secret", "key"].includes(button.dataset.scenario);
+    button.title = usesModel ? `使用 ${provider} 生成行动，再交由世界规则校验` : "直接提交固定行动，由世界规则校验，不调用模型";
+  });
 }
 
 function characterFigure(id) {
@@ -253,7 +273,7 @@ function renderTrace() {
   const steps = [
     ["观察", `${locationName(observation.location)}；可见角色：${(observation.visible_actors || []).map((actor) => actor.name).join("、") || "无"}。`, false],
     ["记忆与认知", `检索到 ${(context.memories || []).length} 条记忆，掌握 ${(context.known_facts || []).length} 条事实。`, false],
-    ["提出行动", trace.action ? `${actionNames[trace.action.type] || trace.action.type}${trace.action.topic ? ` · ${factNames[trace.action.topic] || trace.action.topic}` : ""}${trace.action.item_id ? ` · ${itemName(trace.action.item_id)}` : ""}${trace.action.location_id ? ` · ${locationName(trace.action.location_id)}` : ""}` : "未生成可解析的行动。", !trace.action],
+    [trace.source === "proposal" ? "提交固定行动" : "模型提出行动", trace.action ? `${actionNames[trace.action.type] || trace.action.type}${trace.action.topic ? ` · ${factNames[trace.action.topic] || trace.action.topic}` : ""}${trace.action.item_id ? ` · ${itemName(trace.action.item_id)}` : ""}${trace.action.location_id ? ` · ${locationName(trace.action.location_id)}` : ""}` : "未生成可解析的行动。", !trace.action],
     ["规则校验", trace.verification?.message || "未进入规则校验。", trace.verification?.ok === false],
     ["执行与记录", trace.status === "executed" ? trace.execution?.message || "行动已执行，世界变化已记录。" : "行动未执行，世界状态未改变。", trace.status !== "executed"],
   ];
@@ -269,7 +289,7 @@ function renderTrace() {
   ]);
 }
 
-function render() { renderMap(); renderProfile(); renderWorld(); renderTimeline(); renderTrace(); }
+function render() { renderModel(); renderMap(); renderProfile(); renderWorld(); renderTimeline(); renderTrace(); }
 
 function selectTab(name) {
   ui.tab = name;
@@ -282,13 +302,15 @@ function selectTab(name) {
 }
 
 async function step(body) {
+  const fixedAction = Boolean(body.action);
+  const pendingMessage = fixedAction ? "正在校验并执行固定行动，不调用模型。" : ui.scenario.provider === "deepseek" ? "DeepSeek 正在生成角色行动，完成后将校验并记录结果…" : "Mock 正在生成角色行动…";
   await runOperation(async () => {
     const data = await request("/api/step", body);
     applyState(data);
     $("#conversation-input").value = "";
     const trace = data.trace;
     showNotice(trace.status === "executed" ? `${actorName(trace.actor_id)}的行动已执行。${trace.execution?.speech ? "回应已写入下方事件记录。" : trace.execution?.message || ""}` : `行动${statusLabels[trace.status] || "失败"}：${traceMessage(trace)}`, trace.status !== "executed");
-  });
+  }, pendingMessage, fixedAction ? "执行中…" : "生成中…");
 }
 
 function scenario(name, button) {
@@ -348,7 +370,7 @@ function setup() {
       item.append(el("span", `evaluation-check ${result.passed ? "" : "bad"}`, result.passed ? "✓" : "×"), body);
       list.append(item);
     });
-    openDialog("行为评测", [summary, el("p", "dialog-note", "使用独立初始世界和固定 Mock 输入运行；当前故事进度保持不变。结果验证规则与运行链路，不代表真实模型的行为表现。"), list]);
+    openDialog("Mock 离线评测", [summary, el("p", "dialog-note", "始终使用独立初始世界和固定 Mock 输入离线运行，不调用 DeepSeek；当前故事进度保持不变。结果验证规则与运行链路，不代表真实模型的行为表现。"), list]);
   }));
   $("#export-button").addEventListener("click", () => runOperation(async () => {
     const link = el("a");
