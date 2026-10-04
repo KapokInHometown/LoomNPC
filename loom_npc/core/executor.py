@@ -1,10 +1,12 @@
 """Deterministic, transactional execution of verified actions."""
 
+import copy
 from dataclasses import asdict
 from typing import Any, Dict, List
 
 from ..verifier import ActionVerifier
 from .types import Action, Event, Memory, WorldState
+from .rules import apply_rule_effects
 
 
 def state_diff(before: Dict[str, Any], after: Dict[str, Any], prefix: str = "") -> List[Dict[str, Any]]:
@@ -28,7 +30,8 @@ class Executor:
         verification = ActionVerifier().verify(world, action, actor_id)
         if not verification["ok"]:
             raise ValueError("Action is not executable: " + verification["code"])
-        state = world.to_dict()
+        before = world.to_dict()
+        state = copy.deepcopy(before)
         actor = state["actors"][actor_id]
         target = state["actors"].get(action.target_id)
         origin = actor["location"]
@@ -52,13 +55,7 @@ class Executor:
             target["inventory"].append(action.item_id)
             summary = actor["name"] + "将" + state["items"][action.item_id]["name"] + "交给" + target["name"] + "。"
             importance = 2
-            if action.item_id == "letter" and actor_id == "player" and action.target_id == "mara":
-                if not state["quests"]["letter_delivered"]:
-                    target["trust"]["player"] = target["trust"].get("player", 0) + 1
-                state["quests"]["letter_delivered"] = True
-                summary += "失落的信送达，守灯人对旅人的信任增加。"
-            if action.item_id == "key" and actor_id == "mara" and action.target_id == "player":
-                state["quests"]["key_given"] = True
+        summary += apply_rule_effects(before, state, action.to_dict())
         state["tick"] += 1
         event = Event(
             id="event-{:04d}".format(state["tick"]), tick=state["tick"], type=action.type,

@@ -26,5 +26,38 @@
     "guard_duty": {"id": "guard_duty", "text": "进入旧灯塔需要玛拉保管的黄铜钥匙。", "secret": false, "required_trust": 0, "required_quest": null}
   },
   "quests": {"letter_delivered": false, "key_given": false},
+  "rules": [
+    {
+      "id": "tower_entry",
+      "match": {"type": "move", "actor_id": "player", "location_id": "tower"},
+      "requires": [{"type": "has_item", "actor_id": "player", "item_id": "key"}],
+      "reject": {"code": "KEY_REQUIRED", "message": "灯塔仍锁着；需要先取得灯塔钥匙。"},
+      "effects": [], "summary_suffix": ""
+    },
+    {
+      "id": "key_handover",
+      "match": {"type": "give", "actor_id": "mara", "item_id": "key"},
+      "requires": [
+        {"type": "target_is", "actor_id": "player"},
+        {"type": "quest_state", "quest_id": "letter_delivered", "value": true},
+        {"type": "trust_at_least", "actor_id": "mara", "target_id": "player", "minimum": 1}
+      ],
+      "reject": {"code": "QUEST_LOCKED", "message": "守灯人需要先收到失落的信、建立信任，才会交出钥匙。"},
+      "effects": [{"type": "set_quest", "quest_id": "key_given", "value": true}],
+      "summary_suffix": ""
+    },
+    {
+      "id": "letter_delivery",
+      "match": {"type": "give", "actor_id": "player", "target_id": "mara", "item_id": "letter"},
+      "requires": [],
+      "reject": {"code": "QUEST_LOCKED", "message": "信件交付条件尚未满足。"},
+      "effects": [
+        {"type": "add_trust", "actor_id": "mara", "target_id": "player", "amount": 1,
+         "when": [{"type": "quest_state", "quest_id": "letter_delivered", "value": false}]},
+        {"type": "set_quest", "quest_id": "letter_delivered", "value": true}
+      ],
+      "summary_suffix": "失落的信送达，守灯人对旅人的信任增加。"
+    }
+  ],
   "events": []
 }

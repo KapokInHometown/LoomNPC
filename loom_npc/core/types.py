@@ -140,8 +140,8 @@ def validate_world(data: Any) -> None:
     if not isinstance(data, dict):
         raise ValueError("World must be a JSON object")
     required = {"id", "name", "tick", "locations", "actors", "items", "facts", "quests", "events"}
-    if set(data) != required:
-        raise ValueError("World fields must be: " + ", ".join(sorted(required)))
+    if not required <= set(data) <= required | {"rules"}:
+        raise ValueError("World fields must include " + ", ".join(sorted(required)) + "; only rules is optional")
     if type(data["tick"]) is not int or data["tick"] < 0:
         raise ValueError("World tick must be a non-negative integer")
     for field in ("id", "name"):
@@ -212,6 +212,9 @@ def validate_world(data: Any) -> None:
             raise ValueError("Invalid actor trust " + key)
     if len(owned) != len(set(owned)):
         raise ValueError("Each item may have only one owner")
+    from .rules import validate_rules
+
+    validate_rules(data)
     _validate_history(data)
 
 

@@ -1,0 +1,46 @@
+{
+  "id": "workshop", "name": "山间工坊", "tick": 0,
+  "locations": {
+    "yard": {"id": "yard", "name": "前院", "description": "学徒带着矿石等候工匠。", "connections": ["forge"]},
+    "forge": {"id": "forge", "name": "锻造间", "description": "完成备料后才能进入的工作间。", "connections": ["yard"]}
+  },
+  "actors": {
+    "apprentice": {"id": "apprentice", "name": "学徒", "role": "学徒", "persona": "认真学习，遵守工坊规矩。", "goal": "交付矿石，取得开工许可。", "location": "yard", "inventory": ["ore"], "trust": {}, "belief": {"known_facts": ["work_order"]}, "allowed_actions": ["speak", "move", "give"], "memories": []},
+    "smith": {"id": "smith", "name": "工匠", "role": "工匠", "persona": "务实，只在材料备齐后许可开工。", "goal": "收齐材料并指导学徒。", "location": "yard", "inventory": [], "trust": {"apprentice": 0}, "belief": {"known_facts": ["work_order", "forge_plan"]}, "allowed_actions": ["speak", "move", "give"], "memories": []}
+  },
+  "items": {"ore": {"id": "ore", "name": "矿石", "description": "本次锻造所需的原料。"}},
+  "facts": {
+    "work_order": {"id": "work_order", "text": "先交付矿石，再由工匠说明开工计划。", "secret": false, "required_trust": 0, "required_quest": null},
+    "forge_plan": {"id": "forge_plan", "text": "矿石已备齐。{target}，可以到锻造间开工了。", "secret": true, "required_trust": 2, "required_quest": "materials_ready"}
+  },
+  "quests": {"materials_ready": false, "briefed": false, "started": false},
+  "rules": [
+    {
+      "id": "prepare_materials",
+      "match": {"type": "give", "actor_id": "apprentice", "target_id": "smith", "item_id": "ore"},
+      "requires": [], "reject": {"code": "MATERIALS_REQUIRED", "message": "矿石尚未备齐。"},
+      "effects": [
+        {"type": "set_quest", "quest_id": "materials_ready", "value": true},
+        {"type": "add_trust", "actor_id": "smith", "target_id": "apprentice", "amount": 2,
+         "when": [{"type": "quest_state", "quest_id": "materials_ready", "value": false}]}
+      ],
+      "summary_suffix": "工坊备料完成。"
+    },
+    {
+      "id": "brief_apprentice",
+      "match": {"type": "speak", "actor_id": "smith", "target_id": "apprentice", "topic": "forge_plan"},
+      "requires": [], "reject": {"code": "MATERIALS_REQUIRED", "message": "矿石尚未备齐。"},
+      "effects": [{"type": "set_quest", "quest_id": "briefed", "value": true}],
+      "summary_suffix": ""
+    },
+    {
+      "id": "start_forging",
+      "match": {"type": "move", "actor_id": "apprentice", "location_id": "forge"},
+      "requires": [{"type": "quest_state", "quest_id": "briefed", "value": true}],
+      "reject": {"code": "BRIEFING_REQUIRED", "message": "需要先听取工匠的开工说明。"},
+      "effects": [{"type": "set_quest", "quest_id": "started", "value": true}],
+      "summary_suffix": "锻造任务开始。"
+    }
+  ],
+  "events": []
+}

@@ -3,6 +3,7 @@
 from typing import Any, Dict
 
 from ..core.types import Action, WorldState
+from ..core.rules import rule_rejection
 
 
 def result(ok: bool, code: str, message: str) -> Dict[str, Any]:
@@ -28,9 +29,7 @@ class ActionVerifier:
                 return result(False, "LOCATION_NOT_FOUND", "目标地点不存在。")
             if action.location_id not in state["locations"][actor["location"]]["connections"]:
                 return result(False, "NOT_CONNECTED", "只能移动到相邻地点。")
-            if action.location_id == "tower" and actor_id == "player" and "key" not in actor["inventory"]:
-                return result(False, "KEY_REQUIRED", "灯塔仍锁着；需要先取得灯塔钥匙。")
-            return result(True, "OK", "地点相邻，通行条件满足。")
+            return rule_rejection(state, action.to_dict()) or result(True, "OK", "地点相邻，通行条件满足。")
         if action.target_id not in state["actors"]:
             return result(False, "TARGET_NOT_FOUND", "目标角色不存在。")
         if action.target_id == actor_id:
@@ -48,13 +47,9 @@ class ActionVerifier:
             if fact["secret"] and (actor["trust"].get(action.target_id, 0) < fact["required_trust"] or
                                    (fact["required_quest"] and not state["quests"][fact["required_quest"]])):
                 return result(False, "SECRET_LOCKED", "信任与任务条件尚未满足，秘密不能透露。")
-            return result(True, "OK", "信息在角色认知范围内，披露条件满足。")
+            return rule_rejection(state, action.to_dict()) or result(True, "OK", "信息在角色认知范围内，披露条件满足。")
         if action.item_id not in state["items"]:
             return result(False, "ITEM_NOT_FOUND", "物品不存在。")
         if action.item_id not in actor["inventory"]:
             return result(False, "NOT_OWNER", "角色未持有该物品。")
-        if action.item_id == "key" and actor_id == "mara" and (
-            action.target_id != "player" or not state["quests"].get("letter_delivered", False) or actor["trust"].get("player", 0) < 1
-        ):
-            return result(False, "QUEST_LOCKED", "守灯人需要先收到失落的信、建立信任，才会交出钥匙。")
-        return result(True, "OK", "物品归属、距离与任务条件满足。")
+        return rule_rejection(state, action.to_dict()) or result(True, "OK", "物品归属、距离与任务条件满足。")
