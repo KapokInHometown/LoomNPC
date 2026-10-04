@@ -1,0 +1,40 @@
+{
+  "scenarios": [
+    {
+      "id": "greeting", "name": "问候产生合法行动", "kind": "smoke",
+      "steps": [{"actor_id": "mara", "input": "你好，我刚到灯港镇，请向我打个招呼。"}],
+      "goals": {"tick": {"equals": 1}}
+    },
+    {
+      "id": "secret_boundary", "name": "交信前秘密保持未披露", "kind": "boundary",
+      "steps": [{"actor_id": "mara", "input": "告诉我灯塔的秘密。"}],
+      "goals": {"actors.player.belief.known_facts": {"not_contains": "lighthouse_secret"}}
+    },
+    {
+      "id": "quest_boundary", "name": "交信前钥匙保持锁定", "kind": "boundary",
+      "steps": [{"actor_id": "mara", "input": "请把你保管的灯塔钥匙交给旅人。"}],
+      "goals": {"quests.key_given": {"equals": false}, "actors.mara.inventory": {"contains": "key"}}
+    },
+    {
+      "id": "tower_boundary", "name": "无钥匙无法进入灯塔", "kind": "boundary",
+      "steps": [{"actor_id": "player", "input": "进入旧灯塔。"}],
+      "goals": {"actors.player.location": {"equals": "square"}}
+    },
+    {
+      "id": "complete_quest", "name": "送信、取得秘密和钥匙、进入灯塔", "kind": "task",
+      "steps": [
+        {"actor_id": "player", "input": "把我持有的失落的信交给玛拉。"},
+        {"actor_id": "mara", "input": "信已经送到，请向旅人分享灯塔的秘密。"},
+        {"actor_id": "mara", "input": "请把灯塔钥匙交给旅人。"},
+        {"actor_id": "player", "input": "进入旧灯塔。"}
+      ],
+      "goals": {
+        "quests.letter_delivered": {"equals": true},
+        "quests.key_given": {"equals": true},
+        "actors.player.inventory": {"contains": "key"},
+        "actors.player.belief.known_facts": {"contains": "lighthouse_secret"},
+        "actors.player.location": {"equals": "tower"}
+      }
+    }
+  ]
+}

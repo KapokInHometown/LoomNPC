@@ -61,6 +61,21 @@ python3 -m loom_npc replay traces/deepseek-hello.jsonl
 
 上述 `run` 命令会产生真实 API 请求；`replay` 和 `eval` 不会。真实模型可能提出不同或无效的行动，单次请求成功不代表人设一致性或长期角色表现已通过评测。
 
+## 真实模型行为评测（可选）
+
+`eval-live` 是独立的在线入口，必须显式指定供应商和新的结果目录。密钥从 `DEEPSEEK_API_KEY` 读取，也可通过 `--api-key-file` 显式指定；不会进入结果或 trace。
+
+```bash
+python3 -m loom_npc eval-live --provider deepseek --repeats 3 --output traces/live-first
+python3 -m loom_npc replay traces/live-first/scenario-005-repeat-001.jsonl
+```
+
+随包的 5 个场景每轮共调用模型 8 次；上述命令请求 24 次，每次最多一个请求，不自动重试。每个场景、每次重复均从独立初始世界开始，所有步骤都经 adapter，不使用固定 action。`--model`、`--timeout` 和 `--scenarios` 可配置模型、超时和场景文件。再次评测需使用新的目录，已有目录不会被覆盖。
+
+结果目录包含 `result.json` 和逐场景、逐轮的 JSONL。报告统计 action 解析成功率、verifier 拒绝类型、模型与执行错误，以及送信、取得钥匙、进入灯塔等最终状态目标；每个步骤关联 provider、model、prompt version 和具体 trace。任务以世界状态判定，不对随机模型台词作精确断言。默认 `eval`、网页评测与 CI 仍只运行离线场景。
+
+这是首版结构化行为评测入口，不代表真实模型已经取得某个分数，也不衡量自由生成台词、人设或长期角色表现。指标分母、退出码与自定义场景说明见 [真实模型评测](docs/live-evals.md)。
+
 ## CLI
 
 源码目录中可直接使用 `python3 -m loom_npc`。如需 `loom-npc` 命令，先在虚拟环境安装：
@@ -98,7 +113,7 @@ python3 -m loom_npc replay /tmp/loom-quest.jsonl
 | `loom_npc/verifier/` | 角色权限、位置、知识、秘密与任务规则 |
 | `loom_npc/memory/` | 有来源的记忆与本地检索 |
 | `loom_npc/replay/` | JSONL 导出与离线回放校验 |
-| `loom_npc/evals/` | 固定场景评测及结构化结果 |
+| `loom_npc/evals/` | 离线固定场景与显式在线行为评测、统计及结果 |
 | `loom_npc/data/` | 随安装包分发的世界与评测 JSON |
 | `loom_npc/integrations/` | 本地 HTTP 服务和静态 Demo |
 | `examples/` | 完整任务示例 |
@@ -123,4 +138,4 @@ python3 -m loom_npc eval
 - 回放检验记录中的状态演进，不调用模型；它不是对 trace 来源的加密认证。
 - 信件、钥匙与灯塔通行规则目前针对灯港镇场景实现，尚未抽象为通用任务配置系统。
 - 本地 Demo 是单世界、单进程实验室，重置或重启会清空当前会话。需要保留时先导出 trace。
-- 已提供可选 DeepSeek adapter；游戏引擎接入、多人会话和真实模型系统性评测尚未实现。
+- 已提供可选 DeepSeek adapter 和结构化行为评测入口；游戏引擎接入、多人会话及真实模型的人设、长期行为评测尚未实现。

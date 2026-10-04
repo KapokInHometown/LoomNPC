@@ -27,6 +27,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     run.add_argument("--api-key-file", type=Path, help="显式读取本地密钥文件；否则使用 DEEPSEEK_API_KEY")
     run.add_argument("--timeout", type=float, default=30, help="DeepSeek 网络超时秒数，默认 30")
     commands.add_parser("eval", help="执行全部固定离线行为评测")
+    live = commands.add_parser("eval-live", help="显式调用真实模型评测行为，并保存结果与逐轮 trace")
+    live.add_argument("--provider", choices=("deepseek",), required=True)
+    live.add_argument("--model", default="deepseek-flash")
+    live.add_argument("--api-key-file", type=Path, help="否则使用 DEEPSEEK_API_KEY")
+    live.add_argument("--timeout", type=float, default=30)
+    live.add_argument("--repeats", type=int, default=1, help="每个场景从初始世界独立重复的次数")
+    live.add_argument("--scenarios", type=Path, help="自定义真实评测 JSON；默认随包场景")
+    live.add_argument("--output", type=Path, required=True, help="尚不存在的结果目录")
     validate = commands.add_parser("validate", help="校验世界配置")
     validate.add_argument("world", type=Path, nargs="?")
     replay = commands.add_parser("replay", help="不调用模型，校验并回放 JSONL trace")
@@ -37,6 +45,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             result = run_evals()
             _print(result)
             return 0 if result["passed"] == result["total"] else 1
+        if args.command == "eval-live":
+            from loom_npc.evals.live import run_live_evals
+            from loom_npc.models.deepseek import DeepSeekAdapter, load_api_key
+            from loom_npc.models.prompts import PROMPT_VERSION
+
+            adapter = DeepSeekAdapter(load_api_key(args.api_key_file), model=args.model, timeout=args.timeout)
+            result = run_live_evals(
+                adapter, provider=args.provider, model=args.model, prompt_version=PROMPT_VERSION,
+                output_dir=args.output, repeats=args.repeats, path=args.scenarios,
+            )
+            _print(result)
+            metrics = result["metrics"]
+            return 0 if metrics["completed_runs"] == metrics["total_runs"] else 1
         if args.command == "validate":
             world = load_world(args.world)
             _print({"ok": True, "world": world.to_dict()["name"], "message": "世界配置有效"})
