@@ -10,6 +10,7 @@ from loom_npc.core import ActionParseError, WorldState, build_context, parse_act
 from loom_npc.core.types import BeliefState, Memory, NPC, Observation, Trace
 from loom_npc.memory import retrieve_memories
 from loom_npc.models import ModelDecision
+from loom_npc.replay import export_jsonl, replay_jsonl
 
 
 class RuntimeTests(unittest.TestCase):
@@ -116,10 +117,27 @@ class RuntimeTests(unittest.TestCase):
         self.runtime.step("player", "交信")
         self.runtime.step("mara", "你好")
         actor = self.runtime.world.to_dict()["actors"]["mara"]
-        memories = retrieve_memories(actor, "失落的信", limit=1)
-        self.assertEqual(memories[0]["event_id"], "event-0001")
-        memories[0]["summary"] = "changed"
-        self.assertNotEqual(actor["memories"][0]["summary"], "changed")
+        for query in ("失落的信", "你还记得那封失落的信吗"):
+            with self.subTest(query=query):
+                memories = retrieve_memories(actor, query, limit=1)
+                self.assertEqual(memories[0]["event_id"], "event-0001")
+                memories[0]["summary"] = "changed"
+                self.assertNotEqual(actor["memories"][0]["summary"], "changed")
+
+    def test_natural_chinese_recall_reaches_context_and_trace(self):
+        delivery = self.runtime.step("player", "交信")
+        for _ in range(6):
+            self.runtime.step("mara", "你好")
+        trace = self.runtime.step("mara", "你还记得那封失落的信吗")
+        self.assertEqual(trace["status"], "executed")
+        self.assertEqual(len(trace["context"]["memories"]), 5)
+        self.assertEqual(trace["context"]["memories"][0]["event_id"],
+                         delivery["execution"]["event"]["id"])
+        self.assertEqual(build_context(self.runtime.world, "ivo", trace["input"])["memories"], [])
+        replay = replay_jsonl(export_jsonl(self.runtime.traces))
+        self.assertTrue(replay["ok"], replay)
+        self.assertEqual(replay["model_calls"], 0)
+        self.assertEqual(replay["world"], self.runtime.world.to_dict())
 
     def test_model_parse_and_execution_failures_are_explicit_and_atomic(self):
         class FailingModel:
