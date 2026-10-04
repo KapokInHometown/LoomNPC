@@ -104,6 +104,16 @@ python3 -m loom_npc replay /tmp/loom-quest.jsonl
 
 校验自定义世界可使用 `validate path/to/world.json`；用它启动 Demo 可使用 `run --world path/to/world.json`。可视化地图围绕随包提供的灯港镇场景设计，自定义世界应先通过 CLI 检验。
 
+第二个世界“山间工坊”只通过 JSON 声明交矿石、开工说明和进入锻造间的条件与效果，使用同一套 `speak/move/give` 管线：
+
+```bash
+python3 -m loom_npc validate examples/workshop.json
+python3 -m examples.workshop > /tmp/loom-workshop.jsonl
+python3 -m loom_npc replay /tmp/loom-workshop.jsonl
+```
+
+该示例直接提交固定行动，默认 Mock 与灯港镇文本命令保持原样。新增世界的任务规则配置见 [架构说明](docs/architecture.md#场景规则)。
+
 ## 代码结构
 
 | 目录 | 职责 |
@@ -136,6 +146,6 @@ python3 -m loom_npc eval
 - 支持 `speak`、`move`、`give` 三种行动；台词绑定已知话题模板，尚不支持任意生成式自由文本的语义校验。
 - 认知使用已知事实集合，记忆使用确定性的本地检索：Unicode 与大小写规范化、中文双字片段、英文完整词匹配，支持“你还记得那封失落的信吗”这样的自然问法。检索依赖字面重合，不识别同义改写；尚未实现错误信念、记忆摘要或 embedding。排序规则见[记忆检索](docs/architecture.md#记忆检索)。
 - 回放检验记录中的状态演进，不调用模型；它不是对 trace 来源的加密认证。
-- 信件、钥匙与灯塔通行规则目前针对灯港镇场景实现，尚未抽象为通用任务配置系统。
+- 场景前置条件与任务、信任效果由世界 JSON 的 `rules` 声明；规则只支持有限条件与效果，不执行脚本，也不提供完整任务编排或插件系统。灯港镇与山间工坊共用核心管线。
 - 本地 Demo 是单世界、单进程实验室，重置或重启会清空当前会话。需要保留时先导出 trace。
 - 已提供可选 DeepSeek adapter 和结构化行为评测入口；游戏引擎接入、多人会话及真实模型的人设、长期行为评测尚未实现。
