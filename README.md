@@ -147,7 +147,9 @@ python3 -m examples.workshop > /tmp/loom-workshop.jsonl
 python3 -m loom_npc replay /tmp/loom-workshop.jsonl
 ```
 
-该示例直接提交固定行动，默认 Mock 与灯港镇文本命令保持原样。新增世界的任务规则配置见 [架构说明](docs/architecture.md#场景规则)。
+该示例通过默认 Mock 解析普通中文输入，不传 `proposed_action`：学徒“把矿石交给工匠” → 工匠“请向学徒说明开工计划” → 学徒“进入锻造间”。示例也记录提前进入、提前说明的规则拒绝。可用 `run --world examples/workshop.json` 启动本地服务，再向 `/api/step` 提交 `actor_id` 与 `input`，无需 `action` 字段。
+
+Mock 从角色可见的名称、标识和世界配置中的可选 `aliases` 解析物品、地点与话题；例如工坊的 `forge_plan` 配有“开工计划”“开工说明”。交付仅选择持有物品，移动仅选择相邻地点，说话仅选择已知话题。未指明对象时只接受唯一可见的交谈者；对象缺失或有歧义会记录 `model_error`，不猜测隐藏信息。它支持有限的字面指令，不是通用自然语言模型。配置及匹配边界见 [离线决策](docs/architecture.md#离线决策)；任务条件见 [场景规则](docs/architecture.md#场景规则)。
 
 ## 代码结构
 

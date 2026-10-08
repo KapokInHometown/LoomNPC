@@ -52,7 +52,7 @@ class Observation:
     location: str
     visible_actors: List[Dict[str, Any]]
     visible_items: List[Dict[str, Any]]
-    available_locations: List[Dict[str, str]]
+    available_locations: List[Dict[str, Any]]
     recent_events: List[Dict[str, Any]]
 
 
@@ -157,7 +157,7 @@ def validate_world(data: Any) -> None:
     if not data["locations"] or not data["actors"]:
         raise ValueError("World needs locations and actors")
     for key, location in data["locations"].items():
-        _record(location, {"id", "name", "description", "connections"}, "location " + key)
+        _named_record(location, {"id", "name", "description", "connections"}, "location " + key)
         if location["id"] != key:
             raise ValueError("Invalid location " + key)
         _strings(location, ("id", "name", "description"), "location " + key)
@@ -165,12 +165,12 @@ def validate_world(data: Any) -> None:
         if any(item not in data["locations"] for item in location["connections"]):
             raise ValueError("Unknown location connection in " + key)
     for key, item in data["items"].items():
-        _record(item, {"id", "name", "description"}, "item " + key)
+        _named_record(item, {"id", "name", "description"}, "item " + key)
         if item["id"] != key:
             raise ValueError("Item id does not match " + key)
         _strings(item, ("id", "name", "description"), "item " + key)
     for key, fact in data["facts"].items():
-        _record(fact, {"id", "text", "secret", "required_trust", "required_quest"}, "fact " + key)
+        _named_record(fact, {"id", "text", "secret", "required_trust", "required_quest"}, "fact " + key)
         if fact["id"] != key or type(fact["secret"]) is not bool:
             raise ValueError("Invalid fact " + key)
         _strings(fact, ("id", "text"), "fact " + key)
@@ -221,6 +221,16 @@ def validate_world(data: Any) -> None:
 def _record(value: Any, keys: set, label: str) -> None:
     if not isinstance(value, dict) or set(value) != keys:
         raise ValueError("Invalid fields for " + label)
+
+
+def _named_record(value: Any, keys: set, label: str) -> None:
+    """Validate optional command aliases without accepting arbitrary metadata."""
+    if not isinstance(value, dict) or not keys <= set(value) <= keys | {"aliases"}:
+        raise ValueError("Invalid fields for " + label)
+    if "aliases" in value:
+        _string_list(value["aliases"], label + " aliases")
+        if any(not alias.strip() for alias in value["aliases"]):
+            raise ValueError("Empty command alias in " + label)
 
 
 def _strings(value: dict, keys: tuple, label: str) -> None:

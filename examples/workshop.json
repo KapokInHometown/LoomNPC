@@ -10,8 +10,8 @@
   },
   "items": {"ore": {"id": "ore", "name": "矿石", "description": "本次锻造所需的原料。"}},
   "facts": {
-    "work_order": {"id": "work_order", "text": "先交付矿石，再由工匠说明开工计划。", "secret": false, "required_trust": 0, "required_quest": null},
-    "forge_plan": {"id": "forge_plan", "text": "矿石已备齐。{target}，可以到锻造间开工了。", "secret": true, "required_trust": 2, "required_quest": "materials_ready"}
+    "work_order": {"id": "work_order", "text": "先交付矿石，再由工匠说明开工计划。", "secret": false, "required_trust": 0, "required_quest": null, "aliases": ["工作安排", "任务", "工序", "备料"]},
+    "forge_plan": {"id": "forge_plan", "text": "矿石已备齐。{target}，可以到锻造间开工了。", "secret": true, "required_trust": 2, "required_quest": "materials_ready", "aliases": ["开工计划", "开工说明", "说明", "锻造计划"]}
   },
   "quests": {"materials_ready": false, "briefed": false, "started": false},
   "rules": [

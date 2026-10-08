@@ -1,4 +1,4 @@
-"""Run a second world's fixed quest with the unchanged offline runtime."""
+"""Complete a second world's quest using ordinary offline Chinese commands."""
 
 from pathlib import Path
 
@@ -9,15 +9,15 @@ from loom_npc.replay import export_jsonl
 def main() -> None:
     """Emit rejected and completed workshop decisions as replayable JSONL."""
     runtime = Runtime(load_world(Path(__file__).with_suffix(".json")))
-    actions = [
-        {"type": "move", "actor_id": "apprentice", "location_id": "forge"},
-        {"type": "speak", "actor_id": "smith", "target_id": "apprentice", "topic": "forge_plan"},
-        {"type": "give", "actor_id": "apprentice", "target_id": "smith", "item_id": "ore"},
-        {"type": "speak", "actor_id": "smith", "target_id": "apprentice", "topic": "forge_plan"},
-        {"type": "move", "actor_id": "apprentice", "location_id": "forge"},
+    commands = [
+        ("apprentice", "进入锻造间"),
+        ("smith", "请向学徒说明开工计划"),
+        ("apprentice", "把矿石交给工匠"),
+        ("smith", "请向学徒说明开工计划"),
+        ("apprentice", "进入锻造间"),
     ]
-    for action in actions:
-        runtime.step(action["actor_id"], "固定工坊输入", proposed_action=action)
+    for actor_id, text in commands:
+        runtime.step(actor_id, text)
     print(export_jsonl(runtime.traces), end="")
 
 

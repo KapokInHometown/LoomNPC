@@ -26,8 +26,8 @@ def build_context(world: WorldState, actor_id: str, player_input: str) -> Dict[s
     observation = Observation(
         location=location_id,
         visible_actors=visible,
-        visible_items=[{"id": item, "name": state["items"][item]["name"]} for item in actor["inventory"]],
-        available_locations=[{"id": key, "name": state["locations"][key]["name"]} for key in reachable],
+        visible_items=[_labels(state["items"][item]) for item in actor["inventory"]],
+        available_locations=[_labels(state["locations"][key]) for key in reachable],
         recent_events=events,
     )
     return {
@@ -40,3 +40,8 @@ def build_context(world: WorldState, actor_id: str, player_input: str) -> Dict[s
         "memories": retrieve_memories(actor, player_input),
         "allowed_actions": actor["allowed_actions"],
     }
+
+
+def _labels(entity: Dict[str, Any]) -> Dict[str, Any]:
+    """Expose command labels only for observed items and reachable locations."""
+    return {key: entity[key] for key in ("id", "name", "aliases") if key in entity}

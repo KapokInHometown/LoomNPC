@@ -22,7 +22,7 @@
     },
     {
       "id": "proximity", "name": "远处角色不能与玩家交谈",
-      "steps": [{"actor_id": "ivo", "input": "你好", "expect": {"status": "rejected", "verification.code": "OUT_OF_REACH", "state_diff": []}}]
+      "steps": [{"actor_id": "ivo", "input": "你好", "action": {"type": "speak", "actor_id": "ivo", "target_id": "player", "topic": "greeting"}, "expect": {"status": "rejected", "verification.code": "OUT_OF_REACH", "state_diff": []}}]
     },
     {
       "id": "complete_quest", "name": "送信、建立信任、披露秘密、交钥匙与通行",
