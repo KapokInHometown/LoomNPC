@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#eaf2f5">
-  <title>Loom NPC 织幕 · 灯港镇</title>
+  <title>Loom NPC 织幕</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23203949'/%3E%3Cpath d='M18 14v36M30 14v36M42 14v36M14 23h36M14 35h36M14 47h36' stroke='%23f4ead0' stroke-width='4'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
@@ -22,7 +22,7 @@
 
   <main class="app-shell">
     <section class="intro" aria-labelledby="page-title">
-      <div><p class="chapter-label"><span class="tiny-diamond"></span>灯港镇 · 可交互原型</p><h1 id="page-title">每个角色，<br class="mobile-break">都有自己的世界。</h1><p class="intro-description">一封未送达的信，一座上锁的灯塔。看看信任如何改变角色的选择。</p></div>
+      <div><p class="chapter-label"><span class="tiny-diamond"></span><span id="world-heading">正在读取世界</span></p><h1 id="page-title">每个角色，<br class="mobile-break">都有自己的世界。</h1><p class="intro-description">查看地点与角色，输入行动，观察世界如何变化。</p></div>
       <button id="eval-button" class="secondary-button" type="button" title="使用固定 Mock 输入运行离线评测，不调用在线模型"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-9M4 3h5M4 17h12"/></svg>Mock 离线评测</button>
     </section>
 
@@ -30,9 +30,42 @@
 
     <div class="workspace">
       <div class="world-column">
-        <section id="world-stage" class="world-stage" aria-label="灯港镇世界地图">
-          <div class="map-topline"><div><span class="map-title">灯港镇</span><span class="map-subtitle">海风吹过，故事尚未开始</span></div><div class="tick-label"><span class="sun-icon" aria-hidden="true">☼</span><span id="tick-label">第 0 回合</span></div></div>
+        <section id="world-stage" class="world-stage" aria-label="世界地图">
+          <div class="map-topline"><div><span class="map-title">正在读取世界</span><span class="map-subtitle">地点、角色与任务状态</span></div><div class="tick-label"><span class="sun-icon" aria-hidden="true">☼</span><span id="tick-label">第 0 回合</span></div></div>
           <div class="map-canvas">
+            <div id="map-art"></div>
+            <div id="map-locations"></div>
+            <div id="generic-map" class="generic-map" hidden></div>
+            <div id="map-characters" class="map-characters" aria-label="选择角色"></div>
+
+          </div>
+          <div class="map-bottomline"><span><span class="legend-dot npc-dot"></span>点击角色，查看他的世界</span><span id="viewpoint-legend" hidden></span><span id="quest-status" class="quest-status">正在读取任务</span></div>
+        </section>
+
+        <section class="interaction" aria-labelledby="interaction-title">
+          <div class="interaction-header"><h2 id="interaction-title"><span id="interaction-verb">与</span> <span id="conversation-name">角色</span> <span id="interaction-suffix">交谈</span></h2><span id="interaction-location">选择地图上的一位角色</span></div>
+          <label class="actor-selector" for="actor-select">行动角色<select id="actor-select" disabled></select></label>
+          <form id="conversation-form" class="conversation-form"><label class="sr-only" for="conversation-input">角色行动或对话</label><textarea id="conversation-input" rows="1" maxlength="2000" placeholder="从一句「你好」开始……" required></textarea><button id="send-button" type="submit" class="primary-button"><span id="send-button-label">发送</span> <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 12-6-4 12-3-5-5-1Zm5 1 7-7"/></svg></button></form>
+          <div class="quick-actions" aria-label="可用交互"></div>
+          <p class="model-note" id="model-note"></p>
+          <p class="scenario-note" id="scenario-note">选择行动角色后输入指令。</p>
+        </section>
+
+        <section id="timeline" class="timeline" aria-labelledby="timeline-title"><div class="section-heading"><h2 id="timeline-title">故事正在发生<span id="event-count">0 条决策</span></h2><div class="trace-tools"><button id="replay-button" class="text-button" type="button" disabled>回放</button><button id="export-button" class="text-button" type="button" disabled>导出 JSONL <span aria-hidden="true">↓</span></button></div></div><ol id="event-list" class="event-list"><li class="empty-timeline"><span class="empty-thread" aria-hidden="true">⌁</span><div><strong>这里会留下每一次选择。</strong><p>输入角色行动。被规则拒绝的行动也会被记录。</p></div></li></ol></section>
+      </div>
+
+      <aside class="inspector" aria-label="角色与决策检查器">
+        <section class="character-profile"><div class="profile-topline"><span>角色手册</span><span id="npc-index">—</span></div><div class="profile-identity"><div id="profile-avatar" class="profile-avatar" aria-hidden="true"></div><div><h2 id="profile-name">正在读取世界</h2><p id="profile-role">NPC</p></div><span id="profile-location" class="location-badge">—</span></div><p id="profile-persona" class="profile-persona">连接本地运行时，加载角色的观察、认知与记忆。</p><div id="trust-relationships"></div></section>
+        <div class="inspector-tabs" role="tablist" aria-label="检查器视图"><button id="tab-knowledge" type="button" role="tab" aria-selected="true" aria-controls="panel-knowledge" data-tab="knowledge">角色认知</button><button id="tab-trace" type="button" role="tab" aria-selected="false" aria-controls="panel-trace" data-tab="trace" tabindex="-1">决策轨迹</button><button id="tab-world" type="button" role="tab" aria-selected="false" aria-controls="panel-world" data-tab="world" tabindex="-1">世界真相</button></div>
+        <section id="panel-knowledge" role="tabpanel" aria-labelledby="tab-knowledge" class="inspector-panel"><p class="panel-description"><span class="eye-icon" aria-hidden="true">◉</span>角色只能基于自己的认知行动。</p><div class="inspector-section"><h3>他知道的事<span id="knowledge-count">0</span></h3><ul id="knowledge-list" class="knowledge-list"></ul></div><div class="inspector-section"><h3>当前目标</h3><p id="profile-goal" class="goal-text">—</p></div><div class="inspector-section"><h3>记忆片段<span id="memory-count">0</span></h3><ul id="memory-list" class="memory-list"></ul></div><div class="inspector-section"><h3>随身物品</h3><div id="inventory-list" class="inventory-list"></div></div><div class="inspector-footnote"><span aria-hidden="true">⌁</span><p>认知可以有限，记忆可以不完整。<br>世界规则始终守住行动边界。</p></div></section>
+        <section id="panel-trace" role="tabpanel" aria-labelledby="tab-trace" class="inspector-panel" hidden><div id="trace-content" class="trace-content"><div class="inspector-empty"><span aria-hidden="true">⌁</span><h3>每次决定都有来路。</h3><p>完成一次互动后，查看从观察到执行的完整轨迹。</p></div></div></section>
+        <section id="panel-world" role="tabpanel" aria-labelledby="tab-world" class="inspector-panel" hidden><p class="world-warning">观察者视角。这里的隐藏信息不会自动进入角色上下文。</p><div class="inspector-section"><h3>任务进展</h3><ul id="quest-list" class="quest-list"></ul></div><div class="inspector-section"><h3>世界事实</h3><ul id="world-fact-list" class="world-fact-list"></ul></div></section>
+      </aside>
+    </div>
+    <footer class="site-footer"><span>Loom 织幕 <span class="footer-separator">/</span> 可信、可控、可测试的 NPC 行为</span><span id="runtime-footer">正在读取运行模型</span></footer>
+  </main>
+  <dialog id="result-dialog" class="result-dialog"><div class="dialog-heading"><h2 id="dialog-title">行为评测</h2><button id="dialog-close" class="icon-button" type="button" aria-label="关闭结果">×</button></div><div id="dialog-content"></div><button id="dialog-done" class="primary-button dialog-done" type="button">完成</button></dialog>
+<template id="town-art">
             <svg class="town-map" viewBox="0 0 960 560" role="img" aria-labelledby="map-art-title map-art-description">
               <title id="map-art-title">灯港镇，海边的小世界</title><desc id="map-art-description">镇中广场连接西侧旅店与东侧灯塔。地图上的角色可以点击选择。</desc>
               <defs>
@@ -98,34 +131,7 @@
               <path d="m125 111 6-2 6 2m9-10 5-2 6 2m700 48 7-3 8 3m-3 12 5-2 6 2" fill="none" stroke="#97b3ba" stroke-width="2" stroke-linecap="round"/>
               <g fill="#8ba8af" font-family="Avenir Next, PingFang SC, sans-serif" font-size="12" letter-spacing="4"><text x="699" y="448" transform="rotate(-10 699 448)">雾 海</text></g>
             </svg>
-            <div class="location-label location-inn">渡鸥旅店</div><div class="location-label location-square">潮汐广场</div><div class="location-label location-tower">旧灯塔 · 上锁</div>
-            <div id="map-characters" class="map-characters" aria-label="选择角色"></div>
             <div class="compass" aria-hidden="true"><span>北</span><svg viewBox="0 0 28 38"><path d="m14 4-7 23 7-6 7 6Z" fill="none" stroke="currentColor"/><path d="M14 4v30" stroke="currentColor"/></svg></div>
-          </div>
-          <div class="map-bottomline"><span><span class="legend-dot npc-dot"></span>点击角色，查看他的世界</span><span><span class="legend-dot player-dot"></span>你 · 旅人</span><span id="quest-status" class="quest-status"><span class="letter-icon" aria-hidden="true">▱</span>随身携带一封信</span></div>
-        </section>
-
-        <section class="interaction" aria-labelledby="interaction-title">
-          <div class="interaction-header"><h2 id="interaction-title">与 <span id="conversation-name">角色</span> 交谈</h2><span id="interaction-location">选择地图上的一位角色</span></div>
-          <form id="conversation-form" class="conversation-form"><label class="sr-only" for="conversation-input">对角色说的话</label><textarea id="conversation-input" rows="1" maxlength="2000" placeholder="从一句「你好」开始……" required></textarea><button id="send-button" type="submit" class="primary-button"><span id="send-button-label">发送</span> <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 12-6-4 12-3-5-5-1Zm5 1 7-7"/></svg></button></form>
-          <div class="quick-actions" aria-label="可体验的场景"><span class="quick-label">试一试</span><button type="button" data-scenario="greet">打个招呼</button><button type="button" data-scenario="secret">询问灯塔秘密</button><button type="button" data-scenario="letter" class="suggested-action">交付信件 <span aria-hidden="true">✧</span></button><button type="button" data-scenario="key">索要钥匙</button><button type="button" data-scenario="move">前往灯塔</button><button type="button" data-scenario="unknown" class="boundary-action" title="直接提交角色未知的话题，验证知识边界">测试知识边界</button></div>
-          <p class="model-note" id="model-note"></p>
-          <p class="scenario-note" id="scenario-note">建议路径：问秘密 → 交付信件 → 再问秘密 → 索要钥匙 → 前往灯塔。</p>
-        </section>
-
-        <section id="timeline" class="timeline" aria-labelledby="timeline-title"><div class="section-heading"><h2 id="timeline-title">故事正在发生<span id="event-count">0 条决策</span></h2><div class="trace-tools"><button id="replay-button" class="text-button" type="button" disabled>回放</button><button id="export-button" class="text-button" type="button" disabled>导出 JSONL <span aria-hidden="true">↓</span></button></div></div><ol id="event-list" class="event-list"><li class="empty-timeline"><span class="empty-thread" aria-hidden="true">⌁</span><div><strong>这里会留下每一次选择。</strong><p>与角色交谈，或试着送出那封信。被规则拒绝的行动也会被记录。</p></div></li></ol></section>
-      </div>
-
-      <aside class="inspector" aria-label="角色与决策检查器">
-        <section class="character-profile"><div class="profile-topline"><span>角色手册</span><span id="npc-index">01 / 03</span></div><div class="profile-identity"><div id="profile-avatar" class="profile-avatar" aria-hidden="true"></div><div><h2 id="profile-name">正在读取世界</h2><p id="profile-role">NPC</p></div><span id="profile-location" class="location-badge">—</span></div><p id="profile-persona" class="profile-persona">连接本地运行时，加载角色的观察、认知与记忆。</p><div class="trust-row"><span>对旅人的信任</span><div id="trust-meter" class="trust-meter" aria-label="信任值"><span></span><span></span><span></span><span></span><span></span></div><strong id="trust-value">0</strong></div></section>
-        <div class="inspector-tabs" role="tablist" aria-label="检查器视图"><button id="tab-knowledge" type="button" role="tab" aria-selected="true" aria-controls="panel-knowledge" data-tab="knowledge">角色认知</button><button id="tab-trace" type="button" role="tab" aria-selected="false" aria-controls="panel-trace" data-tab="trace" tabindex="-1">决策轨迹</button><button id="tab-world" type="button" role="tab" aria-selected="false" aria-controls="panel-world" data-tab="world" tabindex="-1">世界真相</button></div>
-        <section id="panel-knowledge" role="tabpanel" aria-labelledby="tab-knowledge" class="inspector-panel"><p class="panel-description"><span class="eye-icon" aria-hidden="true">◉</span>角色只能基于自己的认知行动。</p><div class="inspector-section"><h3>他知道的事<span id="knowledge-count">0</span></h3><ul id="knowledge-list" class="knowledge-list"></ul></div><div class="inspector-section"><h3>当前目标</h3><p id="profile-goal" class="goal-text">—</p></div><div class="inspector-section"><h3>记忆片段<span id="memory-count">0</span></h3><ul id="memory-list" class="memory-list"></ul></div><div class="inspector-section"><h3>随身物品</h3><div id="inventory-list" class="inventory-list"></div></div><div class="inspector-footnote"><span aria-hidden="true">⌁</span><p>认知可以有限，记忆可以不完整。<br>世界规则始终守住行动边界。</p></div></section>
-        <section id="panel-trace" role="tabpanel" aria-labelledby="tab-trace" class="inspector-panel" hidden><div id="trace-content" class="trace-content"><div class="inspector-empty"><span aria-hidden="true">⌁</span><h3>每次决定都有来路。</h3><p>完成一次互动后，查看从观察到执行的完整轨迹。</p></div></div></section>
-        <section id="panel-world" role="tabpanel" aria-labelledby="tab-world" class="inspector-panel" hidden><p class="world-warning">观察者视角。这里的隐藏信息不会自动进入角色上下文。</p><div class="inspector-section"><h3>任务进展</h3><ul id="quest-list" class="quest-list"></ul></div><div class="inspector-section"><h3>世界事实</h3><ul id="world-fact-list" class="world-fact-list"></ul></div></section>
-      </aside>
-    </div>
-    <footer class="site-footer"><span>Loom 织幕 <span class="footer-separator">/</span> 可信、可控、可测试的 NPC 行为</span><span id="runtime-footer">正在读取运行模型</span></footer>
-  </main>
-  <dialog id="result-dialog" class="result-dialog"><div class="dialog-heading"><h2 id="dialog-title">行为评测</h2><button id="dialog-close" class="icon-button" type="button" aria-label="关闭结果">×</button></div><div id="dialog-content"></div><button id="dialog-done" class="primary-button dialog-done" type="button">完成</button></dialog>
+</template>
 </body>
 </html>

@@ -12,6 +12,7 @@ from loom_npc import Runtime, load_world
 from loom_npc.core import WorldState
 from loom_npc.evals import run_evals
 from loom_npc.models import LLMAdapter
+from loom_npc.integrations.demo import demo_presentation, trace_filename
 from loom_npc.replay import export_jsonl, replay_jsonl
 from loom_npc.replay.session import SessionStore
 
@@ -26,6 +27,7 @@ class DemoSession:
                  provider: str = "mock", model: str = "deterministic-mock",
                  session_file: Optional[Path] = None) -> None:
         self.initial = (world or load_world()).to_dict()
+        self.presentation = demo_presentation(self.initial)
         self.adapter = adapter
         self.provider = provider
         self.model = model
@@ -70,14 +72,17 @@ class DemoSession:
 
     def state(self) -> Dict[str, Any]:
         """Expose debugger state, separate from the NPC's filtered context."""
+        world = self.runtime.world.to_dict()
         return {
-            "world": self.runtime.world.to_dict(),
+            "world": world,
             "traces": self.runtime.traces,
+            "trace_filename": trace_filename(world),
             "scenario": {
-                "name": "灯港镇的一封信",
+                "name": world["name"],
                 "provider": self.provider,
                 "model": self.model,
-                "description": "交付信件，建立信任，再打开灯塔。",
+                "description": self.presentation["description"],
+                "presentation": self.presentation,
                 "debugger": True,
             },
         }
@@ -132,7 +137,7 @@ def make_handler(session: DemoSession) -> Type[BaseHTTPRequestHandler]:
             if path == "/api/trace":
                 with session.lock:
                     data = export_jsonl(session.runtime.traces).encode("utf-8")
-                    filename = "loom-lantern-town-%s.jsonl" % session.runtime.world.tick
+                    filename = trace_filename(session.runtime.world.to_dict())
                 self.respond(200, data, "application/x-ndjson; charset=utf-8", filename)
                 return
             static = {"/": ("index.html", "text/html"), "/index.html": ("index.html", "text/html"), "/style.css": ("style.css", "text/css"), "/app.js": ("app.js", "text/javascript")}
@@ -166,7 +171,7 @@ def make_handler(session: DemoSession) -> Type[BaseHTTPRequestHandler]:
                 session.reset()
                 self.json(session.state())
             elif path == "/api/step":
-                actor = data.get("actor_id", "mara")
+                actor = data.get("actor_id", session.presentation["default_actor"])
                 message = data.get("input", "")
                 action = data.get("action")
                 if not isinstance(actor, str) or actor not in session.runtime.world.to_dict()["actors"]:

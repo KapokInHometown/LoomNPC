@@ -1,0 +1,12 @@
+{
+  "id": "minimal", "name": "独居世界", "tick": 0,
+  "locations": {"home": {"id": "home", "name": "家", "description": "休息处", "connections": []}},
+  "actors": {
+    "resident": {
+      "id": "resident", "name": "住客", "role": "居民", "persona": "安静", "goal": "休息",
+      "location": "home", "inventory": [], "trust": {}, "belief": {"known_facts": []},
+      "allowed_actions": [], "memories": []
+    }
+  },
+  "items": {}, "facts": {}, "quests": {}, "events": []
+}

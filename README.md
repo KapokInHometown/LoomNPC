@@ -137,7 +137,7 @@ python3 -m examples.quest > /tmp/loom-quest.jsonl
 python3 -m loom_npc replay /tmp/loom-quest.jsonl
 ```
 
-校验自定义世界可使用 `validate path/to/world.json`；用它启动 Demo 可使用 `run --world path/to/world.json`。可视化地图围绕随包提供的灯港镇场景设计，自定义世界应先通过 CLI 检验。
+校验自定义世界可使用 `validate path/to/world.json`；用它启动 Demo 可使用 `run --world path/to/world.json`。网页从当前世界读取名称、角色、地点连接、任务标志、认知、背包、信任与可用行动。灯港镇保留专属插画和剧情快捷操作，其他世界显示通用地点与角色视图。
 
 第二个世界“山间工坊”只通过 JSON 声明交矿石、开工说明和进入锻造间的条件与效果，使用同一套 `speak/move/give` 管线：
 
@@ -147,7 +147,15 @@ python3 -m examples.workshop > /tmp/loom-workshop.jsonl
 python3 -m loom_npc replay /tmp/loom-workshop.jsonl
 ```
 
-该示例通过默认 Mock 解析普通中文输入，不传 `proposed_action`：学徒“把矿石交给工匠” → 工匠“请向学徒说明开工计划” → 学徒“进入锻造间”。示例也记录提前进入、提前说明的规则拒绝。可用 `run --world examples/workshop.json` 启动本地服务，再向 `/api/step` 提交 `actor_id` 与 `input`，无需 `action` 字段。
+该示例通过默认 Mock 解析普通中文输入，不传 `proposed_action`：学徒“把矿石交给工匠” → 工匠“请向学徒说明开工计划” → 学徒“进入锻造间”。示例也记录提前进入、提前说明的规则拒绝。启动工坊网页：
+
+```bash
+python3 -m loom_npc run --world examples/workshop.json
+```
+
+打开 <http://127.0.0.1:8765>，在“行动角色”中切换学徒与工匠，输入上述指令或点击由当前角色配置生成的文字建议。建议只表达意图，仍通过当前 adapter 和 verifier：提前进入锻造间或提前说明计划会被拒绝，世界保持不变。可查看任务、记忆与 Trace，导出 `loom-workshop-回合数.jsonl` 并离线回放；使用 `--session-file` 后，重启与刷新网页会展示恢复的进度。HTTP 调用仍可只提交 `actor_id` 与 `input`，无需 `action` 字段。
+
+自定义世界默认选择配置中的首个角色；没有持有物品、已知话题或相邻地点时，不生成相应建议。没有任务的世界也可正常展示。任务列表展示布尔标志的当前值，不推断下一步剧情；规则中的事件摘要或话题别名用于改善名称，未配置可读标签时显示标识。普通文本输入始终保留，Mock 的有限解析范围见下文。
 
 Mock 从角色可见的名称、标识和世界配置中的可选 `aliases` 解析物品、地点与话题；例如工坊的 `forge_plan` 配有“开工计划”“开工说明”。交付仅选择持有物品，移动仅选择相邻地点，说话仅选择已知话题。未指明对象时只接受唯一可见的交谈者；对象缺失或有歧义会记录 `model_error`，不猜测隐藏信息。它支持有限的字面指令，不是通用自然语言模型。配置及匹配边界见 [离线决策](docs/architecture.md#离线决策)；任务条件见 [场景规则](docs/architecture.md#场景规则)。
 
@@ -176,7 +184,22 @@ python3 -m loom_npc validate
 python3 -m loom_npc eval
 ```
 
-测试只访问本地文件和 loopback HTTP，不调用外部模型或网络服务。GitHub Actions 在 Python 3.9 与 3.13 上执行同样的检查。
+默认 Python 测试只访问本地文件和 loopback HTTP，不调用外部模型或网络服务。GitHub Actions 在 Python 3.9 与 3.13 上执行同样的检查。
+
+网页回归用例在 `tests/web_demo.mjs`，可传入 Playwright Page 或 Codex 浏览器的 `tab.playwright`。覆盖工坊的两类拒绝、完整任务、角色与信任切换、任务渲染、Trace、Replay，以及灯港镇的剧情快捷操作和接近角色；`verifyMinimal` 覆盖单角色、无任务、无话题、无物品、无行动的世界。浏览器检查是可选层，不增加 Python 运行依赖。使用 Chromium 自动运行时，在独立测试环境安装 Playwright 并启动两个临时 Demo：
+
+```bash
+npm install --prefix /tmp/loom-browser-check playwright
+/tmp/loom-browser-check/node_modules/.bin/playwright install chromium
+python3 -m loom_npc run --world examples/workshop.json --port 8765
+# 另一个终端
+python3 -m loom_npc run --port 8766
+# 第三个终端
+LOOM_PLAYWRIGHT_MODULE=/tmp/loom-browser-check/node_modules/playwright/index.mjs node tests/run_web_demo.mjs workshop http://127.0.0.1:8765
+LOOM_PLAYWRIGHT_MODULE=/tmp/loom-browser-check/node_modules/playwright/index.mjs node tests/run_web_demo.mjs town http://127.0.0.1:8766
+```
+
+回归用例会重置所测会话，请使用独立的临时 Demo。
 
 ## 当前边界
 

@@ -2,16 +2,10 @@
 
 // The browser is a debugger and a player interface. Only the server builds NPC context.
 const $ = (selector) => document.querySelector(selector);
-const ui = { world: null, traces: [], scenario: null, selectedId: "mara", traceId: null, busy: false, tab: "knowledge" };
-const locationPoints = { square: [51, 56], inn: [29, 44], tower: [75, 47] };
-const palette = {
-  mara: { coat: "#648a84", light: "#adc3aa", hair: "#645954", skin: "#e7c9a2" },
-  ivo: { coat: "#ae8c57", light: "#d4ba82", hair: "#806c53", skin: "#edd0a7" },
-  orin: { coat: "#5c778b", light: "#94acb5", hair: "#4e6570", skin: "#e3c29b" },
-  player: { coat: "#c2a35b", light: "#ead599", hair: "#736d55", skin: "#edcba0" },
-};
+const ui = { world: null, traces: [], scenario: null, selectedId: null, traceId: null, traceFilename: null, busy: false, tab: "knowledge", art: null };
+const defaultStyle = { coat: "#648a84", light: "#adc3aa", hair: "#645954", skin: "#e7c9a2" };
+const presentation = () => ui.scenario.presentation;
 const statusLabels = { executed: "已执行", rejected: "规则拒绝", parse_error: "解析失败", model_error: "模型失败", execution_error: "执行失败" };
-const factNames = { greeting: "自我介绍", town: "小镇地理", letter_request: "等待的来信", lighthouse_secret: "灯塔的秘密", smuggler_route: "退潮时的小路", guard_duty: "守塔规则" };
 const actionNames = { speak: "交谈", give: "交付物品", move: "移动" };
 
 function el(tag, className, text) {
@@ -25,11 +19,13 @@ function replaceChildren(selector, nodes) { $(selector).replaceChildren(...nodes
 function actorName(id) { return ui.world?.actors[id]?.name || id || "角色"; }
 function locationName(id) { return ui.world?.locations[id]?.name || id || "未知地点"; }
 function itemName(id) { return ui.world?.items[id]?.name || id; }
+function factName(id) { return presentation().fact_labels?.[id] || ui.world.facts[id]?.aliases?.[0] || id; }
 function pretty(value) { return typeof value === "string" ? value : JSON.stringify(value, null, 2); }
 
 function normalizeState(data) {
   if (!data.world || !data.world.actors || !Array.isArray(data.traces)) throw new Error("世界数据不完整，请重置后重试。");
   if (!data.scenario || !["mock", "deepseek"].includes(data.scenario.provider)) throw new Error("运行模型信息不完整，请刷新页面重试。");
+  if (!data.scenario.presentation || !Object.hasOwn(data.world.actors, data.scenario.presentation.default_actor)) throw new Error("页面展示配置不完整，请刷新页面重试。");
   return { world: data.world, traces: data.traces, scenario: data.scenario };
 }
 
@@ -42,7 +38,7 @@ function showNotice(message, error = false) {
 
 function setBusy(value, label = "处理中…") {
   ui.busy = value;
-  document.querySelectorAll("#conversation-form button, #reset-button, #eval-button, [data-scenario], .map-character:not(.player)").forEach((button) => { button.disabled = value; });
+  document.querySelectorAll("#conversation-form button, #reset-button, #eval-button, #actor-select, [data-scenario], [data-actor]").forEach((button) => { button.disabled = value; });
   $("#conversation-input").disabled = value;
   $("#replay-button").disabled = value || ui.traces.length === 0;
   $("#export-button").disabled = value || ui.traces.length === 0;
@@ -75,7 +71,8 @@ function applyState(data) {
   ui.world = state.world;
   ui.traces = state.traces;
   ui.scenario = state.scenario;
-  if (!ui.world.actors[ui.selectedId]) ui.selectedId = Object.keys(ui.world.actors).find((id) => id !== "player") || "player";
+  ui.traceFilename = data.trace_filename;
+  if (ui.selectedId === null || !Object.hasOwn(ui.world.actors, ui.selectedId)) ui.selectedId = presentation().default_actor;
   if (data.trace) ui.traceId = data.trace.id;
   else if (!ui.traces.some((trace) => trace.id === ui.traceId)) ui.traceId = ui.traces.at(-1)?.id || null;
   render();
@@ -83,23 +80,18 @@ function applyState(data) {
 
 function renderModel() {
   const online = ui.scenario.provider === "deepseek";
-  const provider = online ? "DeepSeek" : "Mock";
   const indicator = $(".model-indicator");
   indicator.dataset.provider = ui.scenario.provider;
   indicator.replaceChildren(el("span"), document.createTextNode(online ? "DeepSeek · 在线" : "Mock · 离线运行"));
   indicator.title = `当前模型：${ui.scenario.model}`;
   $("#runtime-footer").textContent = online ? `本地运行时 · DeepSeek 在线 · ${ui.scenario.model}` : "本地原型 · 确定性 Mock · 无需 API Key";
   $("#model-note").textContent = online
-    ? "文本输入、问候、询问秘密与索要钥匙由 DeepSeek 决策；交信、移动与知识边界测试直接提交固定行动。输入与角色可见上下文会发至 DeepSeek，密钥仅由本地服务持有。"
-    : "文本输入、问候、询问秘密与索要钥匙由本地 Mock 决策；交信、移动与知识边界测试直接提交固定行动，均不调用外部模型。";
-  document.querySelectorAll("[data-scenario]").forEach((button) => {
-    const usesModel = ["greet", "secret", "key"].includes(button.dataset.scenario);
-    button.title = usesModel ? `使用 ${provider} 生成行动，再交由世界规则校验` : "直接提交固定行动，由世界规则校验，不调用模型";
-  });
+    ? "文本输入与文字建议由 DeepSeek 决策。输入与角色可见上下文会发至 DeepSeek，密钥仅由本地服务持有。固定行动仅由世界规则校验。"
+    : "文本输入与文字建议由本地 Mock 决策，固定行动由世界规则校验，均不调用外部模型。";
 }
 
 function characterFigure(id) {
-  const p = palette[id] || palette.mara;
+  const p = presentation().actor_styles?.[id] || defaultStyle;
   const namespace = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(namespace, "svg");
   svg.setAttribute("viewBox", "0 0 32 44");
@@ -117,100 +109,211 @@ function characterFigure(id) {
   shape("path", { d: "m10 19-5 10m18-10 5 10", stroke: p.coat, "stroke-width": 4, "stroke-linecap": "round" });
   shape("ellipse", { cx: 16, cy: 10, rx: 6, ry: 7, fill: p.skin });
   shape("path", { d: "M9 11V7C9-1 24-1 23 8v5l-4-6-9 4Z", fill: p.hair });
-  if (id === "mara") shape("path", { d: "m9 8-1 8 4 2-1-8Z", fill: p.hair });
-  if (id === "ivo") shape("path", { d: "m7 6 4-5 11 1 3 6Z", fill: "#9d8e69" });
-  if (id === "orin") shape("path", { d: "M8 7Q16-6 24 7l1 3H7Z", fill: "#748b94" });
-  if (id === "player") shape("path", { d: "m7 18 18 1-5 7-9-2Z", fill: "#e7d18b" });
+  if (p.detail === "long-hair") shape("path", { d: "m9 8-1 8 4 2-1-8Z", fill: p.hair });
+  if (p.detail === "hat") shape("path", { d: "m7 6 4-5 11 1 3 6Z", fill: "#9d8e69" });
+  if (p.detail === "helmet") shape("path", { d: "M8 7Q16-6 24 7l1 3H7Z", fill: "#748b94" });
+  if (p.detail === "scarf") shape("path", { d: "m7 18 18 1-5 7-9-2Z", fill: "#e7d18b" });
   shape("circle", { cx: 18, cy: 10, r: .8, fill: "#5f6158" });
   return svg;
 }
 
+// These predicates describe presentation only; all actions still use the server verifier.
+function matches(when = {}) {
+  return (when.quest_id === undefined || ui.world.quests[when.quest_id] === true)
+    && (when.actor_id === undefined || ui.world.actors[when.actor_id]?.location === when.location_id)
+    && (when.tick === undefined || ui.world.tick === when.tick);
+}
+
+function narrative(entries, fallback) { return entries?.find((entry) => matches(entry.when))?.text || fallback; }
+
+function selectActor(id) {
+  ui.selectedId = id;
+  renderMap();
+  renderProfile();
+}
+
+function actorButton(actor, className) {
+  const node = el("button", `${className} ${actor.id === ui.selectedId ? "selected" : ""}`);
+  node.type = "button";
+  node.dataset.actor = actor.id;
+  node.setAttribute("aria-label", `查看${actor.name}，${actor.role}，位于${locationName(actor.location)}`);
+  node.setAttribute("aria-pressed", String(actor.id === ui.selectedId));
+  node.disabled = ui.busy;
+  node.append(characterFigure(actor.id), el("span", "character-label", actor.name));
+  node.addEventListener("click", () => selectActor(actor.id));
+  return node;
+}
+
 function renderMap() {
-  const actors = Object.values(ui.world.actors);
-  const nodes = actors.map((actor) => {
-    const isPlayer = actor.id === "player";
-    const node = el(isPlayer ? "div" : "button", `map-character ${isPlayer ? "player" : ""} ${actor.id === ui.selectedId ? "selected" : ""}`);
-    const [x, y] = locationPoints[actor.location] || locationPoints.square;
-    const sameLocation = actors.filter((other) => other.location === actor.location && other.id !== "player");
-    const offset = isPlayer ? [7, 3] : [sameLocation.findIndex((other) => other.id === actor.id) * 5, 0];
-    node.style.left = `${x + offset[0]}%`;
-    node.style.top = `${y + offset[1]}%`;
-    node.append(characterFigure(actor.id), el("span", "character-label", isPlayer ? "你" : actor.name));
-    if (!isPlayer) {
-      node.type = "button";
-      node.dataset.actor = actor.id;
-      node.setAttribute("aria-label", `查看${actor.name}，${actor.role}，位于${locationName(actor.location)}`);
-      node.setAttribute("aria-pressed", String(actor.id === ui.selectedId));
-      node.disabled = ui.busy;
-      node.addEventListener("click", () => { ui.selectedId = actor.id; renderMap(); renderProfile(); });
-    }
-    return node;
-  });
-  replaceChildren("#map-characters", nodes);
+  const view = presentation();
+  const illustrated = view.art === "lantern-town";
+  $("#world-stage").classList.toggle("generic-world", !illustrated);
+  $("#world-stage").setAttribute("aria-label", `${ui.world.name}世界地图`);
+  document.title = `Loom NPC 织幕 · ${ui.world.name}`;
+  $("#world-heading").textContent = `${ui.world.name} · 可交互原型`;
+  $(".intro-description").textContent = ui.scenario.description;
+  $(".map-title").textContent = ui.world.name;
+  $(".map-subtitle").textContent = narrative(view.subtitle, "地点连接与角色位置");
   $("#tick-label").textContent = `第 ${ui.world.tick} 回合`;
-  $(".location-inn").textContent = locationName("inn");
-  $(".location-square").textContent = locationName("square");
-  $(".location-tower").textContent = `${locationName("tower")} ${ui.world.quests.key_given ? "已获钥匙" : "上锁"}`;
-  const player = ui.world.actors.player;
-  const questText = player.location === "tower" ? "已抵达灯塔，新的故事待续" : ui.world.quests.key_given ? "已获得灯塔钥匙" : ui.world.quests.letter_delivered ? "信已送达，信任已经建立" : "随身携带一封信";
-  $("#quest-status").textContent = questText;
-  $(".map-subtitle").textContent = ui.world.tick === 0 ? "海风吹过，故事尚未开始" : ui.world.quests.letter_delivered ? "一封信，让陌生人有了联结" : "每次选择，都留下新的涟漪";
+  if (ui.art !== view.art) {
+    $("#map-art").replaceChildren(...(illustrated ? [$("#town-art").content.cloneNode(true)] : []));
+    ui.art = view.art;
+  }
+  $("#generic-map").hidden = illustrated;
+  $("#map-characters").hidden = !illustrated;
+  $("#map-locations").hidden = !illustrated;
+  const actors = Object.values(ui.world.actors);
+  if (illustrated) {
+    replaceChildren("#map-locations", Object.values(ui.world.locations).map((place) => {
+      const label = el("div", `location-label location-${place.id}`, `${place.name} ${narrative(view.location_status?.[place.id], "")}`.trim());
+      const [x, y] = view.location_labels[place.id];
+      label.style.left = `${x}%`;
+      label.style.top = `${y}%`;
+      return label;
+    }));
+    replaceChildren("#map-characters", actors.map((actor) => {
+      const isViewpoint = actor.id === view.viewpoint_actor;
+      const node = actorButton(actor, `map-character ${isViewpoint ? "viewpoint" : ""}`);
+      const [x, y] = view.location_points[actor.location];
+      const peers = actors.filter((other) => other.location === actor.location && other.id !== view.viewpoint_actor);
+      const offset = isViewpoint ? [7, 3] : [peers.findIndex((other) => other.id === actor.id) * 5, 0];
+      node.style.left = `${x + offset[0]}%`;
+      node.style.top = `${y + offset[1]}%`;
+      return node;
+    }));
+  } else {
+    replaceChildren("#generic-map", Object.values(ui.world.locations).map((place) => {
+      const card = el("section", "location-card");
+      card.dataset.location = place.id;
+      card.append(el("h3", "", place.name), el("p", "location-description", place.description),
+        el("p", "location-connections", place.connections.length ? `通往：${place.connections.map(locationName).join("、")}` : "没有通往其他地点的路径"));
+      const residents = el("div", "location-actors");
+      const present = actors.filter((actor) => actor.location === place.id);
+      residents.append(...(present.length ? present.map((actor) => actorButton(actor, "location-actor")) : [el("span", "empty-location", "暂无角色")]));
+      card.append(residents);
+      return card;
+    }));
+  }
+  const quests = Object.values(ui.world.quests);
+  $("#quest-status").textContent = narrative(view.progress, quests.length ? `任务状态：${quests.filter(Boolean).length} / ${quests.length} 已达成` : "当前世界没有任务标志");
+  const legend = $("#viewpoint-legend");
+  legend.hidden = !view.viewpoint_actor;
+  legend.textContent = view.viewpoint_actor ? `你 · ${actorName(view.viewpoint_actor)}` : "";
+}
+
+function shortcutButton(shortcut) {
+  const button = el("button", shortcut.class || "", shortcut.label);
+  button.type = "button";
+  button.dataset.scenario = shortcut.id;
+  button.disabled = ui.busy;
+  button.title = shortcut.body.action ? "直接提交固定行动，由世界规则校验，不调用模型" : "使用当前模型生成行动，再交由世界规则校验";
+  button.addEventListener("click", () => {
+    if (shortcut.select_actor) selectActor(shortcut.select_actor);
+    step({ ...shortcut.body, actor_id: shortcut.body.actor_id === "$selected" ? ui.selectedId : shortcut.body.actor_id });
+  });
+  return button;
+}
+
+function renderInteractions(actor) {
+  const view = presentation();
+  const choices = [];
+  const viewpoint = view.viewpoint_actor ? ui.world.actors[view.viewpoint_actor] : null;
+  if (viewpoint && viewpoint.id !== actor.id && viewpoint.location !== actor.location) {
+    const destination = ui.world.locations[viewpoint.location].connections.find((id) => id === actor.location)
+      || ui.world.locations[viewpoint.location].connections[0];
+    if (destination && viewpoint.allowed_actions.includes("move")) choices.push({ id: "approach", label: `前往${locationName(destination)}`, class: "suggested-action", body: {
+      actor_id: viewpoint.id, input: `前往${locationName(destination)}`, action: { type: "move", actor_id: viewpoint.id, location_id: destination },
+    } });
+  }
+  if (view.shortcuts) choices.push(...view.shortcuts);
+  else {
+    const peers = Object.values(ui.world.actors).filter((other) => other.id !== actor.id && other.location === actor.location);
+    const add = (id, input) => choices.push({ id, label: input, body: { actor_id: actor.id, input } });
+    if (actor.allowed_actions.includes("give")) for (const item of actor.inventory) for (const peer of peers) {
+      add(`give-${item}-${peer.id}`, `把${itemName(item)}交给${peer.name}`);
+    }
+    if (actor.allowed_actions.includes("speak")) for (const topic of actor.belief.known_facts) for (const peer of peers) {
+      add(`speak-${topic}-${peer.id}`, `向${peer.name}说明${factName(topic)}`);
+    }
+    if (actor.allowed_actions.includes("move")) for (const destination of ui.world.locations[actor.location].connections) {
+      if (destination !== actor.location) add(`move-${destination}`, `进入${locationName(destination)}`);
+    }
+  }
+  replaceChildren(".quick-actions", choices.length ? [el("span", "quick-label", "试一试"), ...choices.map(shortcutButton)] : []);
+  $("#scenario-note").textContent = view.interaction_note || `可用行动：${actor.allowed_actions.map((id) => actionNames[id] || id).join("、") || "无"}。文字建议只表达意图，任务条件由世界规则校验。`;
 }
 
 function renderProfile() {
   const actor = ui.world.actors[ui.selectedId];
-  const npcs = Object.values(ui.world.actors).filter((npc) => npc.id !== "player");
-  const trust = actor.trust?.player || 0;
-  const known = actor.belief?.known_facts || [];
-  $("#npc-index").textContent = `${String(npcs.findIndex((npc) => npc.id === actor.id) + 1).padStart(2, "0")} / ${String(npcs.length).padStart(2, "0")}`;
+  const actors = Object.values(ui.world.actors);
+  const known = actor.belief.known_facts;
+  const options = actors.map((other) => {
+    const option = el("option", "", `${other.name} · ${locationName(other.location)}`);
+    option.value = other.id;
+    return option;
+  });
+  replaceChildren("#actor-select", options);
+  $("#actor-select").value = actor.id;
+  $("#npc-index").textContent = `${String(actors.findIndex((other) => other.id === actor.id) + 1).padStart(2, "0")} / ${String(actors.length).padStart(2, "0")}`;
   $("#profile-name").textContent = actor.name;
   $("#profile-role").textContent = actor.role;
   $("#profile-location").textContent = locationName(actor.location);
   $("#profile-persona").textContent = actor.persona;
   $("#profile-goal").textContent = actor.goal;
   $("#profile-avatar").replaceChildren(characterFigure(actor.id));
-  $("#trust-value").textContent = trust;
-  $("#trust-meter").setAttribute("aria-label", `对旅人的信任值为 ${trust}`);
-  $("#trust-meter").title = `信任值 ${trust}；交付信件后可建立信任`;
-  $("#trust-meter").replaceChildren(...Array.from({ length: 5 }, (_, index) => el("span", index < Math.min(trust, 5) ? "filled" : "")));
+  const trust = Object.entries(actor.trust).map(([target, value]) => {
+    const row = el("div", "trust-row");
+    const meter = el("div", "trust-meter");
+    meter.setAttribute("aria-label", `对${actorName(target)}的信任值为 ${value}`);
+    meter.append(...Array.from({ length: 5 }, (_, index) => el("span", index < Math.min(value, 5) ? "filled" : "")));
+    row.append(el("span", "", `对${actorName(target)}的信任`), meter, el("strong", "", value));
+    return row;
+  });
+  replaceChildren("#trust-relationships", trust.length ? trust : [el("p", "relationship-empty", "尚未建立信任关系")]);
   $("#conversation-name").textContent = actor.name;
-  const together = actor.location === ui.world.actors.player.location;
-  $("#interaction-location").textContent = together ? `你们都在${locationName(actor.location)}` : `先走近角色 · ${locationName(actor.location)}`;
+  const viewpointId = presentation().viewpoint_actor;
+  const viewpoint = viewpointId ? ui.world.actors[viewpointId] : null;
+  const dialogue = viewpoint && actor.id !== viewpoint.id;
+  $("#interaction-verb").textContent = dialogue ? "与" : "让";
+  $("#interaction-suffix").textContent = dialogue ? "交谈" : "行动";
+  $("#interaction-location").textContent = dialogue ? (actor.location === viewpoint.location ? `你们都在${locationName(actor.location)}` : `先走近角色 · ${locationName(actor.location)}`) : `当前位于${locationName(actor.location)}`;
+  $("#conversation-input").placeholder = `为${actor.name}输入行动或对话……`;
   $("#knowledge-count").textContent = known.length;
   const knowledge = known.map((id) => {
     const fact = ui.world.facts[id];
-    const text = fact?.secret ? `${factNames[id] || "秘密"}：知道，但分享须满足信任与任务条件。` : (fact?.text || id).replaceAll("{name}", actor.name);
+    const text = fact.secret ? `${factName(id)}：知道，但分享须满足信任与任务条件。` : fact.text.replaceAll("{name}", actor.name);
     return el("li", "", text);
   });
   replaceChildren("#knowledge-list", knowledge.length ? knowledge : [el("li", "", "尚未掌握相关事实。")]);
-  const memories = actor.memories || [];
+  const memories = actor.memories;
   $("#memory-count").textContent = memories.length;
   replaceChildren("#memory-list", memories.length ? memories.slice(-4).reverse().map((memory) => {
     const item = el("li", "", memory.summary);
     item.append(el("small", "", `第 ${memory.tick} 回合 · 来源 ${memory.event_id}`));
     return item;
-  }) : [el("li", "empty-memory", "还没有与你有关的记忆。")]);
+  }) : [el("li", "empty-memory", "还没有相关记忆。")]);
   replaceChildren("#inventory-list", actor.inventory.length ? actor.inventory.map((id) => el("span", "inventory-item", itemName(id))) : [el("span", "inventory-empty", "没有随身物品")]);
-  const approachButton = $("[data-scenario='approach']");
-  approachButton.hidden = together;
-  const connections = ui.world.locations[ui.world.actors.player.location].connections;
-  const nextLocation = connections.includes(actor.location) ? actor.location : "square";
-  approachButton.textContent = `前往${locationName(nextLocation)}`;
-  approachButton.dataset.location = nextLocation;
-  $("#scenario-note").textContent = actor.id === "mara" ? "建议路径：问秘密 → 交付信件 → 再问秘密 → 索要钥匙 → 前往灯塔。" : `自由交谈与问候面向${actor.name}；信件、钥匙与边界测试仍是守灯人玛拉的场景。`;
+  renderInteractions(actor);
+}
+
+function questLabel(id) {
+  if (presentation().quest_labels?.[id]) return presentation().quest_labels[id];
+  const rule = (ui.world.rules || []).find((rule) => rule.effects.some((effect) => effect.type === "set_quest" && effect.quest_id === id && effect.value));
+  if (rule?.summary_suffix) return rule.summary_suffix;
+  if (rule?.match.topic) return `说明${factName(rule.match.topic)}`;
+  return id;
 }
 
 function renderWorld() {
-  const quests = [["letter_delivered", "把失落的信交给玛拉"], ["key_given", "得到玛拉的灯塔钥匙"]];
-  const questNodes = quests.map(([id, title]) => {
+  const quests = Object.entries(ui.world.quests).map(([id, complete]) => ({ label: questLabel(id), complete, id }));
+  const objectives = (presentation().objectives || []).map((goal) => ({ label: goal.label, complete: matches(goal.when) }));
+  const nodes = [...quests, ...objectives].map(({ label, complete, id }) => {
     const item = el("li");
-    item.append(el("span", `quest-check ${ui.world.quests[id] ? "complete" : ""}`, ui.world.quests[id] ? "✓" : ""), el("span", "", title));
+    if (id) { item.dataset.quest = id; item.title = id; }
+    item.append(el("span", `quest-check ${complete ? "complete" : ""}`, complete ? "✓" : ""), el("span", "", label));
     return item;
   });
-  const arrived = el("li");
-  const atTower = ui.world.actors.player.location === "tower";
-  arrived.append(el("span", `quest-check ${atTower ? "complete" : ""}`, atTower ? "✓" : ""), el("span", "", "旅人进入旧灯塔"));
-  replaceChildren("#quest-list", [...questNodes, arrived]);
+  replaceChildren("#quest-list", nodes.length ? nodes : [el("li", "", "当前世界没有任务标志。")]);
   replaceChildren("#world-fact-list", Object.values(ui.world.facts).map((fact) => {
     const item = el("li");
     item.append(el("span", `fact-tag ${fact.secret ? "secret" : ""}`, fact.secret ? "秘密" : "事实"), document.createTextNode(fact.text));
@@ -231,7 +334,7 @@ function renderTimeline() {
   if (ui.traces.length === 0) {
     const empty = el("li", "empty-timeline");
     const content = el("div");
-    content.append(el("strong", "", "这里会留下每一次选择。"), el("p", "", "与角色交谈，或试着送出那封信。被规则拒绝的行动也会被记录。"));
+    content.append(el("strong", "", "这里会留下每一次选择。"), el("p", "", "输入角色行动。被规则拒绝的行动也会被记录。"));
     empty.append(el("span", "empty-thread", "⌁"), content);
     replaceChildren("#event-list", [empty]);
     return;
@@ -273,7 +376,7 @@ function renderTrace() {
   const steps = [
     ["观察", `${locationName(observation.location)}；可见角色：${(observation.visible_actors || []).map((actor) => actor.name).join("、") || "无"}。`, false],
     ["记忆与认知", `检索到 ${(context.memories || []).length} 条记忆，掌握 ${(context.known_facts || []).length} 条事实。`, false],
-    [trace.source === "proposal" ? "提交固定行动" : "模型提出行动", trace.action ? `${actionNames[trace.action.type] || trace.action.type}${trace.action.topic ? ` · ${factNames[trace.action.topic] || trace.action.topic}` : ""}${trace.action.item_id ? ` · ${itemName(trace.action.item_id)}` : ""}${trace.action.location_id ? ` · ${locationName(trace.action.location_id)}` : ""}` : "未生成可解析的行动。", !trace.action],
+    [trace.source === "proposal" ? "提交固定行动" : "模型提出行动", trace.action ? `${actionNames[trace.action.type] || trace.action.type}${trace.action.topic ? ` · ${factName(trace.action.topic)}` : ""}${trace.action.item_id ? ` · ${itemName(trace.action.item_id)}` : ""}${trace.action.location_id ? ` · ${locationName(trace.action.location_id)}` : ""}` : "未生成可解析的行动。", !trace.action],
     ["规则校验", trace.verification?.message || "未进入规则校验。", trace.verification?.ok === false],
     ["执行与记录", trace.status === "executed" ? trace.execution?.message || "行动已执行，世界变化已记录。" : "行动未执行，世界状态未改变。", trace.status !== "executed"],
   ];
@@ -313,22 +416,6 @@ async function step(body) {
   }, pendingMessage, fixedAction ? "执行中…" : "生成中…");
 }
 
-function scenario(name, button) {
-  if (!ui.world) return;
-  const actor = ui.selectedId;
-  const actions = {
-    greet: { actor_id: actor, input: "你好" },
-    secret: { actor_id: "mara", input: "灯塔的秘密" },
-    letter: { actor_id: "player", input: "把失落的信交给玛拉", action: { type: "give", actor_id: "player", target_id: "mara", item_id: "letter" } },
-    key: { actor_id: "mara", input: "把钥匙交给我" },
-    move: { actor_id: "player", input: "前往旧灯塔", action: { type: "move", actor_id: "player", location_id: "tower" } },
-    unknown: { actor_id: "mara", input: "边界测试：要求玛拉说出她不知道的退潮小路", action: { type: "speak", actor_id: "mara", target_id: "player", topic: "smuggler_route" } },
-    approach: { actor_id: "player", input: `前往${locationName(button.dataset.location)}`, action: { type: "move", actor_id: "player", location_id: button.dataset.location } },
-  };
-  if (["secret", "letter", "key", "unknown"].includes(name)) ui.selectedId = "mara";
-  step(actions[name]);
-}
-
 function openDialog(title, content) {
   $("#dialog-title").textContent = title;
   $("#dialog-content").replaceChildren(...content);
@@ -336,12 +423,7 @@ function openDialog(title, content) {
 }
 
 function setup() {
-  const approach = el("button", "suggested-action");
-  approach.type = "button";
-  approach.dataset.scenario = "approach";
-  approach.hidden = true;
-  $(".quick-actions").insertBefore(approach, $("[data-scenario='greet']"));
-  document.querySelectorAll("[data-scenario]").forEach((button) => button.addEventListener("click", () => scenario(button.dataset.scenario, button)));
+  $("#actor-select").addEventListener("change", (event) => selectActor(event.target.value));
   $("#conversation-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const input = $("#conversation-input").value.trim();
@@ -357,7 +439,7 @@ function setup() {
       if (next !== null) { event.preventDefault(); selectTab(buttons[next].dataset.tab); buttons[next].focus(); }
     });
   });
-  $("#reset-button").addEventListener("click", () => runOperation(async () => { ui.traceId = null; ui.selectedId = "mara"; applyState(await request("/api/reset", {})); selectTab("knowledge"); showNotice("世界已重置。信回到了旅人手中，角色的信任与记忆也回到了起点。"); }));
+  $("#reset-button").addEventListener("click", () => runOperation(async () => { ui.traceId = null; ui.selectedId = null; applyState(await request("/api/reset", {})); selectTab("knowledge"); showNotice("世界已重置。角色位置、物品、信任、任务与记忆回到了起点。"); }));
   $("#eval-button").addEventListener("click", () => runOperation(async () => {
     const report = await request("/api/eval", {});
     const summary = el("p", "dialog-summary");
@@ -370,12 +452,12 @@ function setup() {
       item.append(el("span", `evaluation-check ${result.passed ? "" : "bad"}`, result.passed ? "✓" : "×"), body);
       list.append(item);
     });
-    openDialog("Mock 离线评测", [summary, el("p", "dialog-note", "始终使用独立初始世界和固定 Mock 输入离线运行，不调用 DeepSeek；当前故事进度保持不变。结果验证规则与运行链路，不代表真实模型的行为表现。"), list]);
+    openDialog("Mock 离线评测", [summary, el("p", "dialog-note", "始终使用随包的独立灯港镇世界和固定 Mock 输入离线运行，不调用 DeepSeek；当前故事进度保持不变。结果验证规则与运行链路，不代表真实模型的行为表现。"), list]);
   }));
   $("#export-button").addEventListener("click", () => runOperation(async () => {
     const link = el("a");
     link.href = "/api/trace";
-    link.download = `loom-lantern-town-${ui.world.tick}.jsonl`;
+    link.download = ui.traceFilename;
     document.body.append(link);
     link.click();
     link.remove();
@@ -386,7 +468,7 @@ function setup() {
     const result = await request("/api/replay", { jsonl });
     const summary = el("p", "dialog-summary");
     summary.append(el("strong", "", result.ok ? "回放通过" : "回放失败"));
-    const detail = result.ok ? `已验证 ${result.count} 条轨迹。\n回放世界停在第 ${result.world?.tick ?? "—"} 回合。\n旅人位置：${locationName(result.world?.actors?.player?.location)}。` : pretty(result.error || result.errors || result);
+    const detail = result.ok ? `已验证 ${result.count} 条轨迹。\n回放世界停在第 ${result.world?.tick ?? "—"} 回合。\n角色位置：${Object.values(result.world.actors).map((actor) => `${actor.name}在${locationName(actor.location)}`).join("、")}。` : pretty(result.error || result.errors || result);
     openDialog("轨迹回放", [summary, el("div", "replay-detail", detail), el("p", "dialog-note", result.limitation || "从记录还原并验证世界状态，不再次调用模型，也不替换当前故事进度。")]);
   }));
   $("#dialog-close").addEventListener("click", () => $("#result-dialog").close());

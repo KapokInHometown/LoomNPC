@@ -1,0 +1,213 @@
+{
+  "description": "一封未送达的信，一座上锁的灯塔。看看信任如何改变角色的选择。",
+  "default_actor": "mara",
+  "viewpoint_actor": "player",
+  "art": "lantern-town",
+  "location_points": {
+    "square": [
+      51,
+      56
+    ],
+    "inn": [
+      29,
+      44
+    ],
+    "tower": [
+      75,
+      47
+    ]
+  },
+  "location_labels": {
+    "square": [
+      51,
+      64
+    ],
+    "inn": [
+      25,
+      53
+    ],
+    "tower": [
+      78,
+      59
+    ]
+  },
+  "location_status": {
+    "tower": [
+      {
+        "when": {
+          "quest_id": "key_given"
+        },
+        "text": "已获钥匙"
+      },
+      {
+        "text": "上锁"
+      }
+    ]
+  },
+  "actor_styles": {
+    "mara": {
+      "coat": "#648a84",
+      "light": "#adc3aa",
+      "hair": "#645954",
+      "skin": "#e7c9a2",
+      "detail": "long-hair"
+    },
+    "ivo": {
+      "coat": "#ae8c57",
+      "light": "#d4ba82",
+      "hair": "#806c53",
+      "skin": "#edd0a7",
+      "detail": "hat"
+    },
+    "orin": {
+      "coat": "#5c778b",
+      "light": "#94acb5",
+      "hair": "#4e6570",
+      "skin": "#e3c29b",
+      "detail": "helmet"
+    },
+    "player": {
+      "coat": "#c2a35b",
+      "light": "#ead599",
+      "hair": "#736d55",
+      "skin": "#edcba0",
+      "detail": "scarf"
+    }
+  },
+  "fact_labels": {
+    "greeting": "自我介绍",
+    "town": "小镇地理",
+    "letter_request": "等待的来信",
+    "lighthouse_secret": "灯塔的秘密",
+    "smuggler_route": "退潮时的小路",
+    "guard_duty": "守塔规则"
+  },
+  "quest_labels": {
+    "letter_delivered": "把失落的信交给玛拉",
+    "key_given": "得到玛拉的灯塔钥匙"
+  },
+  "objectives": [
+    {
+      "label": "旅人进入旧灯塔",
+      "when": {
+        "actor_id": "player",
+        "location_id": "tower"
+      }
+    }
+  ],
+  "progress": [
+    {
+      "when": {
+        "actor_id": "player",
+        "location_id": "tower"
+      },
+      "text": "已抵达灯塔，新的故事待续"
+    },
+    {
+      "when": {
+        "quest_id": "key_given"
+      },
+      "text": "已获得灯塔钥匙"
+    },
+    {
+      "when": {
+        "quest_id": "letter_delivered"
+      },
+      "text": "信已送达，信任已经建立"
+    },
+    {
+      "text": "随身携带一封信"
+    }
+  ],
+  "subtitle": [
+    {
+      "when": {
+        "tick": 0
+      },
+      "text": "海风吹过，故事尚未开始"
+    },
+    {
+      "when": {
+        "quest_id": "letter_delivered"
+      },
+      "text": "一封信，让陌生人有了联结"
+    },
+    {
+      "text": "每次选择，都留下新的涟漪"
+    }
+  ],
+  "interaction_note": "建议路径：问秘密 → 交付信件 → 再问秘密 → 索要钥匙 → 前往灯塔。剧情快捷操作面向玛拉与旅人。",
+  "shortcuts": [
+    {
+      "id": "greet",
+      "label": "打个招呼",
+      "body": {
+        "actor_id": "$selected",
+        "input": "你好"
+      }
+    },
+    {
+      "id": "secret",
+      "label": "询问灯塔秘密",
+      "select_actor": "mara",
+      "body": {
+        "actor_id": "mara",
+        "input": "灯塔的秘密"
+      }
+    },
+    {
+      "id": "letter",
+      "label": "交付信件",
+      "class": "suggested-action",
+      "select_actor": "mara",
+      "body": {
+        "actor_id": "player",
+        "input": "把失落的信交给玛拉",
+        "action": {
+          "type": "give",
+          "actor_id": "player",
+          "target_id": "mara",
+          "item_id": "letter"
+        }
+      }
+    },
+    {
+      "id": "key",
+      "label": "索要钥匙",
+      "select_actor": "mara",
+      "body": {
+        "actor_id": "mara",
+        "input": "把钥匙交给我"
+      }
+    },
+    {
+      "id": "move",
+      "label": "前往灯塔",
+      "body": {
+        "actor_id": "player",
+        "input": "前往旧灯塔",
+        "action": {
+          "type": "move",
+          "actor_id": "player",
+          "location_id": "tower"
+        }
+      }
+    },
+    {
+      "id": "unknown",
+      "label": "测试知识边界",
+      "class": "boundary-action",
+      "select_actor": "mara",
+      "body": {
+        "actor_id": "mara",
+        "input": "边界测试：要求玛拉说出她不知道的退潮小路",
+        "action": {
+          "type": "speak",
+          "actor_id": "mara",
+          "target_id": "player",
+          "topic": "smuggler_route"
+        }
+      }
+    }
+  ]
+}
