@@ -1,6 +1,7 @@
 """Explicit decision pipeline: observe, decide, parse, verify, execute, record."""
 
 import copy
+import json
 from typing import Any, Dict, Optional
 
 from ..models import LLMAdapter, MockLLM, ModelDecision, ModelError
@@ -20,6 +21,26 @@ class Runtime:
         self.traces = []
         self.verifier = ActionVerifier()
         self.executor = Executor()
+
+    @classmethod
+    def from_jsonl(cls, text: str, adapter: Optional[LLMAdapter] = None,
+                   initial: Optional[WorldState] = None) -> "Runtime":
+        """Restore a complete validated trace history without model calls.
+
+        An optional initial world anchors recovery to the configured scenario.
+        Construct separately before replacing a running session.
+        """
+        from ..replay import replay_jsonl
+
+        replay = replay_jsonl(text)
+        if not replay["ok"]:
+            raise ValueError("会话恢复校验失败：" + replay["error"])
+        traces = [json.loads(line) for line in text.splitlines() if line.strip()]
+        if initial is not None and traces[0]["before"] != initial.to_dict():
+            raise ValueError("会话初始世界与当前配置不一致")
+        runtime = cls(WorldState.from_dict(replay["world"]), adapter=adapter)
+        runtime.traces = traces
+        return runtime
 
     def step(self, actor_id: str, player_input: str, proposed_action: Any = None) -> Dict[str, Any]:
         """Run the decision pipeline; every failure produces a trace."""

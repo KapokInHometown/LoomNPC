@@ -1,5 +1,6 @@
 """Local, single-world HTTP demo using only the Python standard library."""
 
+import copy
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,6 +13,7 @@ from loom_npc.core import WorldState
 from loom_npc.evals import run_evals
 from loom_npc.models import LLMAdapter
 from loom_npc.replay import export_jsonl, replay_jsonl
+from loom_npc.replay.session import SessionStore
 
 WEB_ROOT = Path(__file__).with_name("web")
 MAX_BODY = 2 * 1024 * 1024
@@ -21,13 +23,50 @@ class DemoSession:
     """Own one demo world; serialize requests so traces remain ordered."""
 
     def __init__(self, world: Optional[WorldState] = None, adapter: Optional[LLMAdapter] = None,
-                 provider: str = "mock", model: str = "deterministic-mock") -> None:
+                 provider: str = "mock", model: str = "deterministic-mock",
+                 session_file: Optional[Path] = None) -> None:
         self.initial = (world or load_world()).to_dict()
         self.adapter = adapter
         self.provider = provider
         self.model = model
         self.runtime = Runtime(load_world_from_dict(self.initial), adapter=self.adapter)
         self.lock = threading.Lock()
+        self.store = SessionStore(session_file, load_world_from_dict(self.initial)) if session_file is not None else None
+        if self.store is not None:
+            if self.store.path.exists():
+                self.runtime = self.store.load(adapter=self.adapter)
+            else:
+                self.store.save(self.runtime)
+
+    def _commit(self, runtime: Runtime) -> None:
+        if self.store is not None:
+            self.store.save(runtime)
+        self.runtime = runtime
+
+    def step(self, actor_id: str, message: str, action: Any = None) -> Dict[str, Any]:
+        """Commit a decision only after saving; caller holds the session lock."""
+        candidate = self.runtime
+        if self.store is not None:
+            candidate = Runtime(load_world_from_dict(self.runtime.world.to_dict()), adapter=self.adapter)
+            candidate.traces = copy.deepcopy(self.runtime.traces)
+        trace = candidate.step(actor_id, message, proposed_action=action)
+        self._commit(candidate)
+        return trace
+
+    def reset(self) -> None:
+        """Persist an empty initial session; caller holds the session lock."""
+        self._commit(Runtime(load_world_from_dict(self.initial), adapter=self.adapter))
+
+    def restore(self, text: str) -> None:
+        """Replace the session with validated traces; caller holds the lock."""
+        candidate = Runtime.from_jsonl(text, adapter=self.adapter, initial=load_world_from_dict(self.initial))
+        self._commit(candidate)
+
+    def save(self) -> None:
+        """Explicitly save to the configured path; caller holds the lock."""
+        if self.store is None:
+            raise ValueError("本地保存需启动时显式指定 --session-file")
+        self.store.save(self.runtime)
 
     def state(self) -> Dict[str, Any]:
         """Expose debugger state, separate from the NPC's filtered context."""
@@ -119,10 +158,12 @@ def make_handler(session: DemoSession) -> Type[BaseHTTPRequestHandler]:
                     self.dispatch(urlsplit(self.path).path, data)
             except (ValueError, TypeError, KeyError, UnicodeError) as exc:
                 self.json({"error": str(exc)}, 400)
+            except OSError:
+                self.json({"error": "本地会话保存失败，当前会话未提交"}, 500)
 
         def dispatch(self, path: str, data: Dict[str, Any]) -> None:
             if path == "/api/reset":
-                session.runtime = Runtime(load_world_from_dict(session.initial), adapter=session.adapter)
+                session.reset()
                 self.json(session.state())
             elif path == "/api/step":
                 actor = data.get("actor_id", "mara")
@@ -134,8 +175,17 @@ def make_handler(session: DemoSession) -> Type[BaseHTTPRequestHandler]:
                     raise ValueError("输入必须是最多 2000 字的文本")
                 if action is not None and not isinstance(action, dict):
                     raise ValueError("action 必须是结构化对象")
-                trace = session.runtime.step(actor, message, proposed_action=action)
+                trace = session.step(actor, message, action)
                 self.json(dict(session.state(), trace=trace))
+            elif path == "/api/save":
+                session.save()
+                self.json({"ok": True, "count": len(session.runtime.traces)})
+            elif path == "/api/restore":
+                content = data.get("jsonl")
+                if not isinstance(content, str):
+                    raise ValueError("jsonl 必须是文本")
+                session.restore(content)
+                self.json(dict(session.state(), ok=True))
             elif path == "/api/eval":
                 self.json(run_evals())
             elif path == "/api/replay":
@@ -151,16 +201,16 @@ def make_handler(session: DemoSession) -> Type[BaseHTTPRequestHandler]:
 
 def create_server(world: Optional[WorldState] = None, port: int = 8765,
                   adapter: Optional[LLMAdapter] = None, provider: str = "mock",
-                  model: str = "deterministic-mock") -> ThreadingHTTPServer:
+                  model: str = "deterministic-mock", session_file: Optional[Path] = None) -> ThreadingHTTPServer:
     """Create a loopback-only HTTP server; port 0 is useful for tests."""
-    return ThreadingHTTPServer(("127.0.0.1", port), make_handler(DemoSession(world, adapter, provider, model)))
+    return ThreadingHTTPServer(("127.0.0.1", port), make_handler(DemoSession(world, adapter, provider, model, session_file)))
 
 
 def serve(world: Optional[WorldState] = None, port: int = 8765,
           adapter: Optional[LLMAdapter] = None, provider: str = "mock",
-          model: str = "deterministic-mock") -> None:
+          model: str = "deterministic-mock", session_file: Optional[Path] = None) -> None:
     """Serve the visual demo until interrupted."""
-    with create_server(world, port, adapter, provider, model) as server:
+    with create_server(world, port, adapter, provider, model, session_file) as server:
         mode = "离线 Mock" if provider == "mock" else "DeepSeek 在线 · " + model
         print("Loom NPC / 织幕： http://127.0.0.1:%s（%s，Ctrl+C 停止）" % (server.server_port, mode), flush=True)
         server.serve_forever()

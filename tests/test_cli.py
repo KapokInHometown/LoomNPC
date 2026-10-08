@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -80,7 +81,7 @@ class CLITests(unittest.TestCase):
         self.assertEqual(output + errors, "")
         serve.assert_called_once()
         self.assertEqual(serve.call_args.args[0].to_dict()["id"], "lantern_town")
-        self.assertEqual(serve.call_args.kwargs, {"port": 8768, "adapter": adapter, "provider": "deepseek", "model": "fixture-model"})
+        self.assertEqual(serve.call_args.kwargs, {"port": 8768, "adapter": adapter, "provider": "deepseek", "model": "fixture-model", "session_file": None})
         adapter.generate_decision.assert_not_called()
 
     def test_default_web_metadata_identifies_mock(self):
@@ -115,6 +116,36 @@ class CLITests(unittest.TestCase):
         self.assertNotIn("model_request", trace)
         self.assertEqual(trace["before"], trace["after"])
         self.assertNotIn(TEST_KEY, output + errors)
+
+    def test_session_file_resumes_across_cli_invocations_and_exports_full_history(self):
+        directory = Path(tempfile.mkdtemp(prefix="loom-cli-session-"))
+        session_file, trace_file = directory / "session.jsonl", directory / "trace.jsonl"
+        with patch.dict(os.environ, {}, clear=True), \
+                patch("urllib.request.OpenerDirector.open", side_effect=AssertionError("Unexpected HTTP")):
+            first = self.invoke(["run", "--session-file", str(session_file), "--actor", "player", "--input", "交信"])
+            second = self.invoke(["run", "--session-file", str(session_file), "--input", "秘密", "--trace", str(trace_file)])
+            replay = self.invoke(["replay", str(trace_file)])
+        self.assertEqual(first[0], 0, first)
+        self.assertEqual(second[0], 0, second)
+        self.assertEqual(json.loads(second[1])["id"], "trace-0002")
+        self.assertTrue(json.loads(second[1])["after"]["quests"]["letter_delivered"])
+        self.assertEqual(replay[0], 0, replay)
+        self.assertEqual(json.loads(replay[1])["count"], 2)
+
+    def test_corrupt_session_fails_before_any_decision_or_server_start(self):
+        session_file = Path(tempfile.mkdtemp(prefix="loom-cli-corrupt-")) / "session.jsonl"
+        session_file.write_text("broken", encoding="utf-8")
+        with patch.object(MockLLM, "generate_decision", side_effect=AssertionError("Unexpected model call")), \
+                patch("loom_npc.integrations.server.ThreadingHTTPServer") as server:
+            status, output, errors = self.invoke(["run", "--session-file", str(session_file), "--input", "你好"])
+            web_status, _, web_errors = self.invoke(["run", "--session-file", str(session_file)])
+        self.assertEqual(status, 1)
+        self.assertEqual(web_status, 1)
+        self.assertEqual(output, "")
+        self.assertFalse(json.loads(errors)["ok"])
+        self.assertFalse(json.loads(web_errors)["ok"])
+        self.assertEqual(session_file.read_text(encoding="utf-8"), "broken")
+        server.assert_not_called()
 
 
 if __name__ == "__main__":

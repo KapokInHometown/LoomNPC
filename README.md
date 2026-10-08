@@ -34,6 +34,41 @@ python3 -m loom_npc run
 
 界面中的全局世界视图是开发者调试信息；NPC 只接收经过可见性过滤的上下文。问候、询问秘密、索要钥匙及文本输入使用当前选定的模型；交信、移动和知识边界测试直接提交固定的结构化行动。决策轨迹标明提案来源，文本输入用于提出行动，台词仍由已知话题模板生成。
 
+## 本地会话保存与恢复（可选）
+
+显式指定会话文件后，每次决策（包括拒绝和失败）都会保存；重新运行同一命令会先离线校验全部记录，再恢复世界、角色记忆、认知、关系、任务进度和 trace 编号。默认运行仍只保存在内存中。
+
+```bash
+python3 -m loom_npc run --session-file traces/session.jsonl
+```
+
+文件不存在时创建初始会话；已有文件无效、截断或初始世界与当前配置不一致时，启动失败，文件保持原样。自定义世界需每次指定相同的 `--world`。恢复不调用模型；继续行动使用本次启动选择的 adapter，模型配置与凭据不由会话文件读取。
+
+单次 CLI 决策也可延续同一会话：
+
+```bash
+python3 -m loom_npc run --session-file traces/session.jsonl --actor player --input '交信'
+python3 -m loom_npc run --session-file traces/session.jsonl --actor mara --input '灯塔的秘密' --trace traces/resumed.jsonl
+python3 -m loom_npc replay traces/resumed.jsonl
+```
+
+以上 CLI 示例应使用独立的新会话文件。`--trace` 导出恢复后包含全部历史的普通 trace JSONL；会话文件额外带一行版本、初始世界和 trace 数量的头记录，不直接传给 `replay`。网页的导出按钮和 `/api/trace` 仍导出普通 trace JSONL。
+
+HTTP 入口：
+
+| 接口 | 行为 |
+| --- | --- |
+| `POST /api/save`，正文 `{}` | 立即保存到启动时配置的文件；未启用 `--session-file` 时返回 400 |
+| `POST /api/restore`，正文 `{"jsonl": "完整 trace JSONL 文本"}` | 完整回放校验并核对初始世界后替换当前会话；启用保存时同时写入会话文件 |
+| `POST /api/replay`，同上 | 只校验并返回重算结果，保持当前会话 |
+| `POST /api/reset`，正文 `{}` | 回到初始世界，清空 trace；启用保存时也覆盖存档为初始会话 |
+
+恢复接口需由调用方显式发起，现有网页回放按钮仍只做校验。HTTP 正文上限为 2 MiB，较长历史可通过会话文件在启动时恢复。恢复普通 trace 时以提供的完整历史为准；会话文件的 trace 数量额外检测整行丢失。
+
+保存先校验世界与 trace 一致，再通过同目录临时文件、`fsync` 和原子替换写入。保存失败返回明确错误，当前内存会话和已有存档不提交；在线模型请求若已发生，其外部调用无法撤销。写入失败留下的临时文件不会用于恢复。
+
+每个文件仅供一个进程使用，不提供跨进程锁、数据库或云同步。存档包含全局调试状态和输入，应使用本地私有目录；`traces/` 已被 Git 忽略。回放证明记录内部一致，不能认证来源；当前规则无法重算的旧版本记录会拒绝恢复。
+
 ## 接入 DeepSeek（可选）
 
 启用真实模型需要网络和有效的 DeepSeek API key。密钥可由外部环境变量 `DEEPSEEK_API_KEY` 注入：
@@ -122,7 +157,7 @@ python3 -m loom_npc replay /tmp/loom-workshop.jsonl
 | `loom_npc/models/` | 模型接口、确定性 mock、DeepSeek 适配器与集中提示词 |
 | `loom_npc/verifier/` | 角色权限、位置、知识、秘密与任务规则 |
 | `loom_npc/memory/` | 有来源的记忆与本地检索 |
-| `loom_npc/replay/` | JSONL 导出与离线回放校验 |
+| `loom_npc/replay/` | JSONL 导出、离线回放校验与可选本地会话存储 |
 | `loom_npc/evals/` | 离线固定场景与显式在线行为评测、统计及结果 |
 | `loom_npc/data/` | 随安装包分发的世界与评测 JSON |
 | `loom_npc/integrations/` | 本地 HTTP 服务和静态 Demo |
@@ -147,5 +182,5 @@ python3 -m loom_npc eval
 - 认知使用已知事实集合，记忆使用确定性的本地检索：Unicode 与大小写规范化、中文双字片段、英文完整词匹配，支持“你还记得那封失落的信吗”这样的自然问法。检索依赖字面重合，不识别同义改写；尚未实现错误信念、记忆摘要或 embedding。排序规则见[记忆检索](docs/architecture.md#记忆检索)。
 - 回放检验记录中的状态演进，不调用模型；它不是对 trace 来源的加密认证。
 - 场景前置条件与任务、信任效果由世界 JSON 的 `rules` 声明；规则只支持有限条件与效果，不执行脚本，也不提供完整任务编排或插件系统。灯港镇与山间工坊共用核心管线。
-- 本地 Demo 是单世界、单进程实验室，重置或重启会清空当前会话。需要保留时先导出 trace。
+- 本地 Demo 是单世界、单进程实验室；默认重启清空会话，显式指定 `--session-file` 可保存并校验恢复。重置会清空当前会话及已启用的存档。
 - 已提供可选 DeepSeek adapter 和结构化行为评测入口；游戏引擎接入、多人会话及真实模型的人设、长期行为评测尚未实现。

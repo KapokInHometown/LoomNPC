@@ -22,6 +22,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     run.add_argument("--input", help="执行一次所选模型的决策并输出 trace，不启动网页")
     run.add_argument("--actor", default="mara")
     run.add_argument("--trace", type=Path, help="单次决策时保存 JSONL trace")
+    run.add_argument("--session-file", type=Path, help="显式启用本地会话：启动校验恢复，每次决策原子保存")
     run.add_argument("--provider", choices=("mock", "deepseek"), default="mock")
     run.add_argument("--model", default="deepseek-flash", help="DeepSeek 模型名")
     run.add_argument("--api-key-file", type=Path, help="显式读取本地密钥文件；否则使用 DEEPSEEK_API_KEY")
@@ -79,8 +80,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             adapter = DeepSeekAdapter(load_api_key(args.api_key_file), model=args.model, timeout=args.timeout)
             model_name = args.model
         if args.input is not None:
-            runtime = Runtime(world, adapter=adapter)
-            trace = runtime.step(args.actor, args.input)
+            if args.session_file is not None:
+                from loom_npc.integrations.server import DemoSession
+
+                session = DemoSession(world, adapter=adapter, session_file=args.session_file)
+                with session.lock:
+                    trace = session.step(args.actor, args.input)
+                runtime = session.runtime
+            else:
+                runtime = Runtime(world, adapter=adapter)
+                trace = runtime.step(args.actor, args.input)
             if args.trace:
                 args.trace.parent.mkdir(parents=True, exist_ok=True)
                 args.trace.write_text(export_jsonl(runtime.traces), encoding="utf-8")
@@ -88,7 +97,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 0 if trace["status"] == "executed" else 1
         from loom_npc.integrations.server import serve
 
-        serve(world, port=args.port, adapter=adapter, provider=args.provider, model=model_name)
+        serve(world, port=args.port, adapter=adapter, provider=args.provider, model=model_name,
+              session_file=args.session_file)
         return 0
     except (OSError, ValueError, TypeError, KeyError) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
