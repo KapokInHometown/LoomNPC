@@ -12,6 +12,7 @@ from loom_npc import Runtime, load_world
 from loom_npc.core import WorldState
 from loom_npc.evals import run_evals
 from loom_npc.models import LLMAdapter
+from loom_npc.models.speech import SpeechAdapter
 from loom_npc.integrations.demo import demo_presentation, trace_filename
 from loom_npc.replay import export_jsonl, replay_jsonl
 from loom_npc.replay.session import SessionStore
@@ -25,18 +26,20 @@ class DemoSession:
 
     def __init__(self, world: Optional[WorldState] = None, adapter: Optional[LLMAdapter] = None,
                  provider: str = "mock", model: str = "deterministic-mock",
-                 session_file: Optional[Path] = None) -> None:
+                 session_file: Optional[Path] = None,
+                 speech_adapter: Optional[SpeechAdapter] = None) -> None:
         self.initial = (world or load_world()).to_dict()
         self.presentation = demo_presentation(self.initial)
         self.adapter = adapter
+        self.speech_adapter = speech_adapter
         self.provider = provider
         self.model = model
-        self.runtime = Runtime(load_world_from_dict(self.initial), adapter=self.adapter)
+        self.runtime = Runtime(load_world_from_dict(self.initial), adapter=self.adapter, speech_adapter=self.speech_adapter)
         self.lock = threading.Lock()
         self.store = SessionStore(session_file, load_world_from_dict(self.initial)) if session_file is not None else None
         if self.store is not None:
             if self.store.path.exists():
-                self.runtime = self.store.load(adapter=self.adapter)
+                self.runtime = self.store.load(adapter=self.adapter, speech_adapter=self.speech_adapter)
             else:
                 self.store.save(self.runtime)
 
@@ -49,7 +52,7 @@ class DemoSession:
         """Commit a decision only after saving; caller holds the session lock."""
         candidate = self.runtime
         if self.store is not None:
-            candidate = Runtime(load_world_from_dict(self.runtime.world.to_dict()), adapter=self.adapter)
+            candidate = Runtime(load_world_from_dict(self.runtime.world.to_dict()), adapter=self.adapter, speech_adapter=self.speech_adapter)
             candidate.traces = copy.deepcopy(self.runtime.traces)
         trace = candidate.step(actor_id, message, proposed_action=action)
         self._commit(candidate)
@@ -57,11 +60,12 @@ class DemoSession:
 
     def reset(self) -> None:
         """Persist an empty initial session; caller holds the session lock."""
-        self._commit(Runtime(load_world_from_dict(self.initial), adapter=self.adapter))
+        self._commit(Runtime(load_world_from_dict(self.initial), adapter=self.adapter, speech_adapter=self.speech_adapter))
 
     def restore(self, text: str) -> None:
         """Replace the session with validated traces; caller holds the lock."""
-        candidate = Runtime.from_jsonl(text, adapter=self.adapter, initial=load_world_from_dict(self.initial))
+        candidate = Runtime.from_jsonl(text, adapter=self.adapter, initial=load_world_from_dict(self.initial),
+                                       speech_adapter=self.speech_adapter)
         self._commit(candidate)
 
     def save(self) -> None:
@@ -81,6 +85,7 @@ class DemoSession:
                 "name": world["name"],
                 "provider": self.provider,
                 "model": self.model,
+                "speech_enabled": self.speech_adapter is not None,
                 "description": self.presentation["description"],
                 "presentation": self.presentation,
                 "debugger": True,
@@ -206,16 +211,18 @@ def make_handler(session: DemoSession) -> Type[BaseHTTPRequestHandler]:
 
 def create_server(world: Optional[WorldState] = None, port: int = 8765,
                   adapter: Optional[LLMAdapter] = None, provider: str = "mock",
-                  model: str = "deterministic-mock", session_file: Optional[Path] = None) -> ThreadingHTTPServer:
+                  model: str = "deterministic-mock", session_file: Optional[Path] = None,
+                  speech_adapter: Optional[SpeechAdapter] = None) -> ThreadingHTTPServer:
     """Create a loopback-only HTTP server; port 0 is useful for tests."""
-    return ThreadingHTTPServer(("127.0.0.1", port), make_handler(DemoSession(world, adapter, provider, model, session_file)))
+    return ThreadingHTTPServer(("127.0.0.1", port), make_handler(DemoSession(world, adapter, provider, model, session_file, speech_adapter)))
 
 
 def serve(world: Optional[WorldState] = None, port: int = 8765,
           adapter: Optional[LLMAdapter] = None, provider: str = "mock",
-          model: str = "deterministic-mock", session_file: Optional[Path] = None) -> None:
+          model: str = "deterministic-mock", session_file: Optional[Path] = None,
+          speech_adapter: Optional[SpeechAdapter] = None) -> None:
     """Serve the visual demo until interrupted."""
-    with create_server(world, port, adapter, provider, model, session_file) as server:
+    with create_server(world, port, adapter, provider, model, session_file, speech_adapter) as server:
         mode = "离线 Mock" if provider == "mock" else "DeepSeek 在线 · " + model
         print("Loom NPC / 织幕： http://127.0.0.1:%s（%s，Ctrl+C 停止）" % (server.server_port, mode), flush=True)
         server.serve_forever()

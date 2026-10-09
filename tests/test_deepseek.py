@@ -15,6 +15,8 @@ from loom_npc import Runtime, load_world
 from loom_npc.core import build_context
 from loom_npc.models.deepseek import API_URL, DeepSeekAdapter, DeepSeekError, load_api_key
 from loom_npc.models.prompts import PROMPT_VERSION, build_messages
+from loom_npc.models.prompts import SPEECH_PROMPT_VERSION, build_speech_messages
+from loom_npc.models.speech import ModelSpeech
 from loom_npc.replay import export_jsonl, replay_jsonl
 
 
@@ -45,6 +47,46 @@ class DeepSeekTests(unittest.TestCase):
 
     def respond(self, data):
         self.opener.open.return_value = Response(data)
+
+    def test_optional_dialogue_uses_separate_request_and_replays_without_transport(self):
+        self.opener.open.side_effect = [Response(envelope()), Response(envelope('{"text":"旅人，愿灯火照亮你的归途。"}'))]
+        runtime = Runtime(adapter=self.adapter, speech_adapter=self.adapter)
+        trace = runtime.step("mara", "你好")
+        self.assertEqual(self.opener.open.call_count, 2)
+        speech = trace["speech"]
+        self.assertEqual(speech["status"], "generated")
+        self.assertEqual(speech["model_request"]["prompt_version"], SPEECH_PROMPT_VERSION)
+        self.assertEqual(speech["model_request"]["body"]["messages"], build_speech_messages(speech["context"]))
+        second_request = self.opener.open.call_args.args[0]
+        payload = json.loads(second_request.data)
+        self.assertEqual(second_request.full_url, API_URL)
+        self.assertEqual(payload["response_format"], {"type": "json_object"})
+        self.assertEqual(payload["thinking"], {"type": "disabled"})
+        self.assertNotIn("lighthouse_secret", json.dumps(payload))
+        self.assertNotIn("旧航海图", json.dumps(payload, ensure_ascii=False))
+        self.assertNotIn(TEST_KEY, export_jsonl(runtime.traces))
+        self.opener.open.reset_mock()
+        self.opener.open.side_effect = AssertionError("No regeneration during replay")
+        self.assertTrue(replay_jsonl(export_jsonl(runtime.traces))["ok"])
+        self.opener.open.assert_not_called()
+
+    def test_dialogue_provider_failure_or_credential_echo_falls_back_without_retry(self):
+        for failure in (TimeoutError(TEST_KEY), Response(envelope(json.dumps({"text": TEST_KEY})))):
+            self.opener.open.reset_mock()
+            self.opener.open.side_effect = [Response(envelope()), failure]
+            runtime = Runtime(adapter=self.adapter, speech_adapter=self.adapter)
+            trace = runtime.step("mara", "你好")
+            self.assertEqual(self.opener.open.call_count, 2)
+            self.assertEqual(trace["status"], "executed")
+            self.assertEqual(trace["speech"]["code"], "MODEL_ERROR")
+            self.assertNotIn(TEST_KEY, export_jsonl(runtime.traces))
+            self.assertTrue(replay_jsonl(export_jsonl(runtime.traces))["ok"])
+
+    def test_direct_speech_adapter_returns_dedicated_result_type(self):
+        self.respond(envelope('{"text":"hello"}'))
+        output = self.adapter.generate_speech({"approved_fact": {"text": "hello"}})
+        self.assertIsInstance(output, ModelSpeech)
+        self.assertEqual(output.request["prompt_version"], SPEECH_PROMPT_VERSION)
 
     def test_request_uses_fixed_host_json_mode_and_actor_context(self):
         self.respond(envelope())

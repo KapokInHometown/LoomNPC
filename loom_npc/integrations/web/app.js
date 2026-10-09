@@ -88,6 +88,10 @@ function renderModel() {
   $("#model-note").textContent = online
     ? "文本输入与文字建议由 DeepSeek 决策。输入与角色可见上下文会发至 DeepSeek，密钥仅由本地服务持有。固定行动仅由世界规则校验。"
     : "文本输入与文字建议由本地 Mock 决策，固定行动由世界规则校验，均不调用外部模型。";
+  if (ui.scenario.speech_enabled) $("#model-note").textContent = (online
+    ? "行动由 DeepSeek 决策，输入与角色上下文会发送给模型；固定提案也经过世界规则校验。"
+    : "行动由本地 Mock 决策，固定提案也经过世界规则校验。")
+    + "已开启非秘密台词生成：回复仅供展示，语义未校验，失败时保留固定回应。";
 }
 
 function characterFigure(id) {
@@ -206,7 +210,8 @@ function shortcutButton(shortcut) {
   button.type = "button";
   button.dataset.scenario = shortcut.id;
   button.disabled = ui.busy;
-  button.title = shortcut.body.action ? "直接提交固定行动，由世界规则校验，不调用模型" : "使用当前模型生成行动，再交由世界规则校验";
+  button.title = shortcut.body.action ? (ui.scenario.speech_enabled && shortcut.body.action.type === "speak"
+    ? "固定行动经规则校验；合法非秘密话题可生成台词" : "直接提交固定行动，由世界规则校验，不调用模型") : "使用当前模型生成行动，再交由世界规则校验";
   button.addEventListener("click", () => {
     if (shortcut.select_actor) selectActor(shortcut.select_actor);
     step({ ...shortcut.body, actor_id: shortcut.body.actor_id === "$selected" ? ui.selectedId : shortcut.body.actor_id });
@@ -322,6 +327,8 @@ function renderWorld() {
 }
 
 function traceMessage(trace) {
+  if (trace.speech?.status === "generated") return `“${trace.speech.text}”（生成台词，语义未校验）`;
+  if (trace.speech?.status === "fallback") return `“${trace.speech.text}”（生成失败，使用固定回应）`;
   if (trace.execution?.speech) return `“${trace.execution.speech}”`;
   if (trace.errors?.length) return trace.errors.map((error) => typeof error === "string" ? error : error.message || pretty(error)).join("；");
   if (trace.verification?.ok === false) return trace.verification.message;
@@ -380,6 +387,8 @@ function renderTrace() {
     ["规则校验", trace.verification?.message || "未进入规则校验。", trace.verification?.ok === false],
     ["执行与记录", trace.status === "executed" ? trace.execution?.message || "行动已执行，世界变化已记录。" : "行动未执行，世界状态未改变。", trace.status !== "executed"],
   ];
+  if (trace.speech) steps.push(["角色回应", trace.speech.status === "generated" ? "生成台词仅供展示，未经过语义安全校验。"
+    : trace.speech.status === "skipped" ? "秘密话题使用固定回应。" : "台词生成失败或格式无效，使用固定回应。", false]);
   for (const [title, description, bad] of steps) {
     const step = el("li", `trace-step ${bad ? "bad" : ""}`);
     step.append(el("h4", "", title), el("p", "", description));
@@ -389,6 +398,7 @@ function renderTrace() {
     detailDisclosure("查看角色实际上下文", context),
     detailDisclosure("查看决策来源与结构化行动", { source: trace.source === "proposal" ? "固定行动提案" : "模型适配器", raw_output: trace.raw_output, action: trace.action }),
     detailDisclosure("查看校验结果与世界变化", { verification: trace.verification, execution: trace.execution, state_diff: trace.state_diff, errors: trace.errors }),
+    ...(trace.speech ? [detailDisclosure("查看台词生成与回退", trace.speech)] : []),
   ]);
 }
 
@@ -406,7 +416,8 @@ function selectTab(name) {
 
 async function step(body) {
   const fixedAction = Boolean(body.action);
-  const pendingMessage = fixedAction ? "正在校验并执行固定行动，不调用模型。" : ui.scenario.provider === "deepseek" ? "DeepSeek 正在生成角色行动，完成后将校验并记录结果…" : "Mock 正在生成角色行动…";
+  const pendingMessage = fixedAction ? (ui.scenario.speech_enabled && body.action.type === "speak"
+    ? "正在校验固定行动，合法非秘密话题可生成回应…" : "正在校验并执行固定行动，不调用模型。") : ui.scenario.provider === "deepseek" ? "DeepSeek 正在生成角色行动，完成后将校验并记录结果…" : "Mock 正在生成角色行动…";
   await runOperation(async () => {
     const data = await request("/api/step", body);
     applyState(data);

@@ -5,26 +5,31 @@ import json
 from typing import Any, Dict, Optional
 
 from ..models import LLMAdapter, MockLLM, ModelDecision, ModelError
+from ..models.speech import SpeechAdapter
 from ..verifier import ActionVerifier, result
 from .context import build_context
 from .executor import Executor, state_diff
 from .parser import ActionParseError, parse_action
+from .speech import render_speech
 from .types import Trace, WorldState, load_world
 
 
 class Runtime:
     """Run one proposed NPC action at a time and retain all decision outcomes."""
 
-    def __init__(self, world: Optional[WorldState] = None, adapter: Optional[LLMAdapter] = None):
+    def __init__(self, world: Optional[WorldState] = None, adapter: Optional[LLMAdapter] = None,
+                 speech_adapter: Optional[SpeechAdapter] = None):
         self.world = world if world is not None else load_world()
         self.adapter = adapter if adapter is not None else MockLLM()
+        self.speech_adapter = speech_adapter
         self.traces = []
         self.verifier = ActionVerifier()
         self.executor = Executor()
 
     @classmethod
     def from_jsonl(cls, text: str, adapter: Optional[LLMAdapter] = None,
-                   initial: Optional[WorldState] = None) -> "Runtime":
+                   initial: Optional[WorldState] = None,
+                   speech_adapter: Optional[SpeechAdapter] = None) -> "Runtime":
         """Restore a complete validated trace history without model calls.
 
         An optional initial world anchors recovery to the configured scenario.
@@ -38,7 +43,7 @@ class Runtime:
         traces = [json.loads(line) for line in text.splitlines() if line.strip()]
         if initial is not None and traces[0]["before"] != initial.to_dict():
             raise ValueError("会话初始世界与当前配置不一致")
-        runtime = cls(WorldState.from_dict(replay["world"]), adapter=adapter)
+        runtime = cls(WorldState.from_dict(replay["world"]), adapter=adapter, speech_adapter=speech_adapter)
         runtime.traces = traces
         return runtime
 
@@ -93,6 +98,9 @@ class Runtime:
             message = "行动执行失败（" + type(error).__name__ + "）。"
             trace["execution"] = {"ok": False, "message": message}
             return self._finish(trace, "execution_error", "execute", "EXECUTION_ERROR", message)
+        if action.type == "speak" and self.speech_adapter is not None:
+            trace["speech"] = render_speech(self.speech_adapter, before, trace["context"],
+                                            action, trace["execution"]["speech"])
         return self._finish(trace, "executed")
 
     def _finish(self, trace: Dict[str, Any], status: str, stage: str = "", code: str = "", message: str = "") -> Dict[str, Any]:

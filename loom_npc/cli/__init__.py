@@ -24,6 +24,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     run.add_argument("--trace", type=Path, help="单次决策时保存 JSONL trace")
     run.add_argument("--session-file", type=Path, help="显式启用本地会话：启动校验恢复，每次决策原子保存")
     run.add_argument("--provider", choices=("mock", "deepseek"), default="mock")
+    run.add_argument("--generate-speech", action="store_true", help="显式启用 DeepSeek 非秘密台词生成；失败回退固定台词")
     run.add_argument("--model", default="deepseek-flash", help="DeepSeek 模型名")
     run.add_argument("--api-key-file", type=Path, help="显式读取本地密钥文件；否则使用 DEEPSEEK_API_KEY")
     run.add_argument("--timeout", type=float, default=30, help="DeepSeek 网络超时秒数，默认 30")
@@ -72,6 +73,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             parser.error("--trace 需要同时提供 --input；网页可通过导出按钮保存 trace")
         if args.api_key_file and args.provider != "deepseek":
             parser.error("--api-key-file 需要同时提供 --provider deepseek")
+        if args.generate_speech and args.provider != "deepseek":
+            parser.error("--generate-speech 需要同时提供 --provider deepseek；离线脚本可使用 SpeechAdapter")
         adapter = MockLLM()
         model_name = "deterministic-mock"
         if args.provider == "deepseek":
@@ -79,16 +82,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
             adapter = DeepSeekAdapter(load_api_key(args.api_key_file), model=args.model, timeout=args.timeout)
             model_name = args.model
+        speech_options = {"speech_adapter": adapter} if args.generate_speech else {}
         if args.input is not None:
             if args.session_file is not None:
                 from loom_npc.integrations.server import DemoSession
 
-                session = DemoSession(world, adapter=adapter, session_file=args.session_file)
+                session = DemoSession(world, adapter=adapter, session_file=args.session_file, **speech_options)
                 with session.lock:
                     trace = session.step(args.actor, args.input)
                 runtime = session.runtime
             else:
-                runtime = Runtime(world, adapter=adapter)
+                runtime = Runtime(world, adapter=adapter, **speech_options)
                 trace = runtime.step(args.actor, args.input)
             if args.trace:
                 args.trace.parent.mkdir(parents=True, exist_ok=True)
@@ -98,7 +102,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         from loom_npc.integrations.server import serve
 
         serve(world, port=args.port, adapter=adapter, provider=args.provider, model=model_name,
-              session_file=args.session_file)
+              session_file=args.session_file, **speech_options)
         return 0
     except (OSError, ValueError, TypeError, KeyError) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False), file=sys.stderr)

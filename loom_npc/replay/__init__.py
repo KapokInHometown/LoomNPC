@@ -6,6 +6,7 @@ from typing import Any, Dict, Iterable
 from ..core.context import build_context
 from ..core.executor import Executor, state_diff
 from ..core.parser import ActionParseError, parse_action
+from ..core.speech import verify_speech_record
 from ..core.types import WorldState
 from ..verifier import ActionVerifier, result
 
@@ -20,6 +21,7 @@ def replay_jsonl(text: str) -> Dict[str, Any]:
     world = None
     count = 0
     recorded_failures = 0
+    speech_records = 0
     try:
         if not isinstance(text, str):
             raise ValueError("Replay input must be JSONL text")
@@ -30,10 +32,13 @@ def replay_jsonl(text: str) -> Dict[str, Any]:
             if not isinstance(trace, dict):
                 raise ValueError("Trace must be an object")
             required = {"id", "tick", "actor_id", "input", "source", "context", "raw_output", "action", "verification", "execution", "status", "errors", "before", "after", "state_diff"}
-            if not required <= set(trace) <= required | {"model_request"}:
+            if not required <= set(trace) <= required | {"model_request", "speech"}:
                 raise ValueError("Trace fields do not match the schema")
             if "model_request" in trace:
                 _require(trace["source"] == "adapter" and isinstance(trace["model_request"], dict), "Invalid model request provenance")
+            if "speech" in trace:
+                _require(trace["status"] == "executed" and isinstance(trace["action"], dict)
+                         and trace["action"].get("type") == "speak", "Dialogue requires executed speak")
             if world is None:
                 world = WorldState.from_dict(trace["before"])
             _require(trace["before"] == world.to_dict(), "World-state continuity mismatch")
@@ -45,14 +50,21 @@ def replay_jsonl(text: str) -> Dict[str, Any]:
             _require(trace["state_diff"] == state_diff(trace["before"], trace["after"]), "State diff mismatch")
             if trace["status"] in ("model_error", "execution_error"):
                 recorded_failures += 1
+            if "speech" in trace:
+                speech_records += 1
             count += 1
         _require(count > 0, "Replay contains no traces")
-    except (ValueError, TypeError, KeyError, AttributeError) as error:
+    except (ValueError, TypeError, KeyError, AttributeError, RecursionError) as error:
         return {"ok": False, "count": count, "world": world.to_dict() if world else None, "error": str(error), "model_calls": 0}
+    limitations = []
+    if recorded_failures:
+        limitations.append("模型或环境导致的失败只核对结构与未改状态，不重现外部故障。")
+    if speech_records:
+        limitations.append("台词仅核对记录、格式与回退边界，不重新生成，不检验语义安全或认证来源。")
     return {
         "ok": True, "count": count, "world": world.to_dict(), "model_calls": 0,
         "recorded_failures": recorded_failures,
-        "limitation": "模型或环境导致的失败只核对结构与未改状态，不重现外部故障。" if recorded_failures else None,
+        "limitation": "".join(limitations) or None,
     }
 
 
@@ -115,3 +127,5 @@ def _verify_trace(world: WorldState, trace: Dict[str, Any]) -> None:
     _require(status == "executed" and trace["errors"] == [], "Valid execution status mismatch")
     execution = Executor().execute(world, action, actor_id)
     _require(trace["execution"] == execution, "Execution result mismatch")
+    if "speech" in trace:
+        verify_speech_record(trace["speech"], trace["before"], trace["context"], action, execution["speech"])

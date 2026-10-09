@@ -9,6 +9,7 @@ from typing import Optional
 from ..core.runtime import Runtime
 from ..core.types import WorldState
 from ..models import LLMAdapter
+from ..models.speech import SpeechAdapter
 from . import export_jsonl
 
 
@@ -23,7 +24,8 @@ class SessionStore:
         self.path = Path(path)
         self.initial = WorldState.from_dict(initial.to_dict())
 
-    def load(self, adapter: Optional[LLMAdapter] = None) -> Runtime:
+    def load(self, adapter: Optional[LLMAdapter] = None,
+             speech_adapter: Optional[SpeechAdapter] = None) -> Runtime:
         """Read an existing file; corruption never falls back to a new world."""
         text = self.path.read_text(encoding="utf-8")
         lines = text.splitlines()
@@ -41,8 +43,8 @@ class SessionStore:
         if type(count) is not int or count < 0 or count != sum(bool(line.strip()) for line in lines[1:]):
             raise ValueError("会话 trace 数量不一致，记录可能已截断")
         if count == 0:
-            return Runtime(WorldState.from_dict(header["initial"]), adapter=adapter)
-        return Runtime.from_jsonl("\n".join(lines[1:]), adapter=adapter, initial=self.initial)
+            return Runtime(WorldState.from_dict(header["initial"]), adapter=adapter, speech_adapter=speech_adapter)
+        return Runtime.from_jsonl("\n".join(lines[1:]), adapter=adapter, initial=self.initial, speech_adapter=speech_adapter)
 
     def save(self, runtime: Runtime) -> None:
         """Validate, fsync, and atomically replace the file before acknowledging."""

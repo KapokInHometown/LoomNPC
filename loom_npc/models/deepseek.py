@@ -7,10 +7,11 @@ import os
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from . import ModelDecision, ModelError
-from .prompts import PROMPT_VERSION, build_messages
+from .prompts import PROMPT_VERSION, SPEECH_PROMPT_VERSION, build_messages, build_speech_messages
+from .speech import ModelSpeech
 
 
 API_URL = "https://api.deepseek.com/chat/completions"
@@ -75,9 +76,19 @@ class DeepSeekAdapter:
 
     def generate_decision(self, context: Dict[str, Any]) -> ModelDecision:
         """Send actor context once; parsing and world-rule checks stay in the runtime."""
+        return self._generate(context, build_messages, PROMPT_VERSION)
+
+    def generate_speech(self, context: Dict[str, Any]) -> ModelSpeech:
+        """Make a separate optional dialogue request with the public projection."""
+        output = self._generate(context, build_speech_messages, SPEECH_PROMPT_VERSION)
+        return ModelSpeech(output.raw_output, output.request)
+
+    def _generate(self, context: Dict[str, Any],
+                  message_builder: Callable[[Dict[str, Any]], List[Dict[str, str]]],
+                  prompt_version: str) -> ModelDecision:
         try:
             payload = {
-                "model": self.model, "messages": build_messages(context),
+                "model": self.model, "messages": message_builder(context),
                 "response_format": {"type": "json_object"}, "stream": False,
                 "thinking": {"type": "disabled"}, "max_tokens": self.max_tokens,
             }
@@ -98,7 +109,7 @@ class DeepSeekAdapter:
         except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException):
             raise DeepSeekError("DeepSeek 网络连接失败或请求超时。") from None
         content = self._response_content(raw_response)
-        return ModelDecision(content, request={"provider": "deepseek", "prompt_version": PROMPT_VERSION, "body": payload})
+        return ModelDecision(content, request={"provider": "deepseek", "prompt_version": prompt_version, "body": payload})
 
     def _response_content(self, raw_response: bytes) -> str:
         if not isinstance(raw_response, bytes):

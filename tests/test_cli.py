@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 
 from loom_npc.cli import main
 from loom_npc.models import MockLLM, ModelDecision, ModelError
+from loom_npc.models.speech import ModelSpeech
 
 
 TEST_KEY = "fictional-cli-credential-never-valid-3491"
@@ -23,6 +24,30 @@ class CLITests(unittest.TestCase):
         with redirect_stdout(output), redirect_stderr(errors):
             status = main(arguments)
         return status, output.getvalue(), errors.getvalue()
+
+    def test_generate_speech_is_explicit_for_cli_and_web(self):
+        adapter = Mock()
+        adapter.generate_decision.return_value = ModelDecision(json.dumps(GREETING))
+        adapter.generate_speech.return_value = ModelSpeech('{"text":"旅人，愿灯火照亮你的归途。"}')
+        with patch("loom_npc.models.deepseek.load_api_key", return_value=TEST_KEY), \
+                patch("loom_npc.models.deepseek.DeepSeekAdapter", return_value=adapter), \
+                patch("loom_npc.integrations.server.serve") as serve:
+            status, output, errors = self.invoke(["run", "--provider", "deepseek", "--generate-speech", "--input", "你好"])
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(output)["speech"]["status"], "generated")
+            self.assertEqual(errors, "")
+            adapter.generate_speech.assert_called_once()
+            self.assertEqual(self.invoke(["run", "--provider", "deepseek", "--generate-speech"])[0], 0)
+            self.assertIs(serve.call_args.kwargs["speech_adapter"], adapter)
+
+    def test_generate_speech_with_default_mock_fails_before_network(self):
+        output, errors = io.StringIO(), io.StringIO()
+        with patch("urllib.request.OpenerDirector.open") as transport, \
+                redirect_stdout(output), redirect_stderr(errors), self.assertRaises(SystemExit) as caught:
+            main(["run", "--generate-speech", "--input", "你好"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("--generate-speech 需要同时提供 --provider deepseek", errors.getvalue())
+        transport.assert_not_called()
 
     def test_default_mock_requires_no_key_and_never_calls_http(self):
         with patch.dict(os.environ, {}, clear=True), \

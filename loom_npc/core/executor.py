@@ -23,7 +23,7 @@ def state_diff(before: Dict[str, Any], after: Dict[str, Any], prefix: str = "") 
 
 
 class Executor:
-    """The only runtime component that commits world-state mutations."""
+    """Commit canonical actions; generated display text never enters execution."""
 
     def execute(self, world: WorldState, action: Action, actor_id: str) -> Dict[str, Any]:
         """Recheck rules, apply on a copy, and commit all changes atomically."""
@@ -40,6 +40,8 @@ class Executor:
         speech = None
         importance = 1
         if action.type == "speak":
+            # Fact propagation and event/memory provenance use this registered
+            # template, independently of optional later dialogue generation.
             fact = state["facts"][action.topic]
             speech = fact["text"].format(name=actor["name"], target=target["name"])
             if action.topic not in target["belief"]["known_facts"]:

@@ -32,7 +32,7 @@ python3 -m loom_npc run
 4. 再问灯塔秘密，领取钥匙，然后前往灯塔：合法行动依次执行。
 5. 查看角色记忆、实际决策上下文和状态差异，导出 JSONL 并回放。
 
-界面中的全局世界视图是开发者调试信息；NPC 只接收经过可见性过滤的上下文。问候、询问秘密、索要钥匙及文本输入使用当前选定的模型；交信、移动和知识边界测试直接提交固定的结构化行动。决策轨迹标明提案来源，文本输入用于提出行动，台词仍由已知话题模板生成。
+界面中的全局世界视图是开发者调试信息；NPC 只接收经过可见性过滤的上下文。问候、询问秘密、索要钥匙及文本输入使用当前选定的模型；交信、移动和知识边界测试直接提交固定的结构化行动。决策轨迹标明提案来源，文本输入用于提出行动；默认台词使用已知话题模板，也可显式启用下述生成式台词。
 
 ## 本地会话保存与恢复（可选）
 
@@ -95,6 +95,30 @@ python3 -m loom_npc replay traces/deepseek-hello.jsonl
 ```
 
 上述 `run` 命令会产生真实 API 请求；`replay` 和 `eval` 不会。真实模型可能提出不同或无效的行动，单次请求成功不代表人设一致性或长期角色表现已通过评测。
+
+## 生成式 NPC 台词（可选）
+
+使用 `--generate-speech` 后，合法的非秘密 `speak` 行动执行成功时，会额外请求一次台词生成。角色的人设、目标、当前观察、输入与过滤后的记忆进入独立的台词上下文。默认 Mock、未加此参数的 DeepSeek、离线评测与 CI 保持原有行为。
+
+```bash
+python3 -m loom_npc run --provider deepseek --generate-speech
+python3 -m loom_npc run --provider deepseek --generate-speech --actor mara --input '你好，我刚来到这里' --trace traces/dialogue.jsonl
+python3 -m loom_npc replay traces/dialogue.jsonl
+```
+
+凭据配置与上节相同。CLI 中该参数需要 `--provider deepseek`；每个非秘密说话回合最多请求两次（行动决策一次、台词一次），没有自动重试。固定行动提案省去决策请求，但启用台词时仍可能请求生成。拒绝、解析失败、行动模型失败、执行失败和 `move/give` 不调用台词模型；秘密话题即使获准披露也保留固定台词。生成失败、空白、超长或格式无效时使用固定台词，Trace 记录回退原因，已执行的行动仍为成功。
+
+生成台词仅供展示，未经过语义安全校验。事实传播、任务效果、事件和记忆继续使用登记话题与固定模板；模型输出不会变成世界事实或角色知识，也不会进入后续模型上下文。网页显示生成台词及其未校验标记，世界事件保留规范模板，两者可在 Trace 中分别查看。这个边界不保证显示的台词忠实、无隐性泄密或符合人设。
+
+无需凭据的离线演示：
+
+```bash
+python3 -m examples.dialogue > /tmp/loom-dialogue.jsonl
+python3 -m loom_npc replay /tmp/loom-dialogue.jsonl
+python3 -m unittest discover -s tests -p test_speech.py -v
+```
+
+示例使用脚本化台词 Adapter，展示记忆输入、正常输出、失败回退、秘密拒绝及获准后的固定秘密台词；它验证接口与记录，不证明真实模型的对话质量。Python 集成可通过 `Runtime(speech_adapter=...)` 独立注入实现 `generate_speech(context) -> ModelSpeech` 的适配器，不必更换行动 Adapter。完整的数据、信任与评测边界见[生成式台词](docs/architecture.md#生成式台词)。
 
 ## 真实模型行为评测（可选）
 
@@ -203,7 +227,7 @@ LOOM_PLAYWRIGHT_MODULE=/tmp/loom-browser-check/node_modules/playwright/index.mjs
 
 ## 当前边界
 
-- 支持 `speak`、`move`、`give` 三种行动；台词绑定已知话题模板，尚不支持任意生成式自由文本的语义校验。
+- 支持 `speak`、`move`、`give` 三种行动；可显式启用非秘密话题的生成台词，默认及失败时使用固定模板。生成文本仅供展示，尚不支持自由文本的语义安全校验。
 - 认知使用已知事实集合，记忆使用确定性的本地检索：Unicode 与大小写规范化、中文双字片段、英文完整词匹配，支持“你还记得那封失落的信吗”这样的自然问法。检索依赖字面重合，不识别同义改写；尚未实现错误信念、记忆摘要或 embedding。排序规则见[记忆检索](docs/architecture.md#记忆检索)。
 - 回放检验记录中的状态演进，不调用模型；它不是对 trace 来源的加密认证。
 - 场景前置条件与任务、信任效果由世界 JSON 的 `rules` 声明；规则只支持有限条件与效果，不执行脚本，也不提供完整任务编排或插件系统。灯港镇与山间工坊共用核心管线。
